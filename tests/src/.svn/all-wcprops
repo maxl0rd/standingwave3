@@ -1,0 +1,23 @@
+K 25
+svn:wc:ra_dav:version-url
+V 30
+/svn/!svn/ver/8/trunk/test/src
+END
+testing123.mp3
+K 25
+svn:wc:ra_dav:version-url
+V 45
+/svn/!svn/ver/2/trunk/test/src/testing123.mp3
+END
+StandingwaveTestSuite.as
+K 25
+svn:wc:ra_dav:version-url
+V 55
+/svn/!svn/ver/8/trunk/test/src/StandingwaveTestSuite.as
+END
+StandingwaveTest.mxml
+K 25
+svn:wc:ra_dav:version-url
+V 52
+/svn/!svn/ver/6/trunk/test/src/StandingwaveTest.mxml
+END
