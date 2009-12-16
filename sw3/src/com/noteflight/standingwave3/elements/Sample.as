@@ -20,9 +20,10 @@ package com.noteflight.standingwave3.elements
     
     import cmodule.awave.CLibInit;
     
+    import com.noteflight.standingwave3.utils.AudioUtils;
+    
     import flash.media.Sound;
     import flash.utils.ByteArray;
-    
     
     /**
      * Sample is the fundamental audio source in StandingWave, and is the primary
@@ -394,10 +395,10 @@ package com.noteflight.standingwave3.elements
         /**
          * Mix another whole Sample into this sample. They should have the same descriptor.
          * @param sourceSample the sample to mix in
-         * @param gain the mix factor
+         * @param gain the gain or attenuation of the source signal
          * @param offset the number of frames into this target sample at which to begin mixing
          */ 
-        public function mixIn(sourceSample:Sample, gain:Number=1.0, offset:Number=0):void 
+        public function mixIn(sourceSample:Sample, gain:Number=0.0, offset:Number=0):void 
         {
 			mixInDirectAccessSource(IDirectAccessSource(sourceSample), 0, gain, offset, _frames);  
         }
@@ -408,12 +409,13 @@ package com.noteflight.standingwave3.elements
        	 * This is one of our core-functions, as memory to memory adds are *extremely* fast.
        	 * @param source the IDirectAccessSource, with valid data at the sourceOffset
        	 * @param sourceOffset the number of frames into our source to begin mixing from, defaults to 0
-       	 * @param gain gain or attenuation of the source signal, as a factor, defaults to 1
+       	 * @param gain gain or attenuation of the source signal
        	 * @param targetOffset the number of frames into this target sample at which to begin mixing, defaults to 0
        	 */
-        public function mixInDirectAccessSource(source:IDirectAccessSource, sourceOffset:Number=0, gain:Number=1.0, targetOffset:Number=0, numFrames:Number=-1):void {
+        public function mixInDirectAccessSource(source:IDirectAccessSource, sourceOffset:Number=0, gain:Number=0.0, targetOffset:Number=0, numFrames:Number=-1):void {
        		var thisSamplePointer:uint;
         	var mixSamplePointer:uint;
+ 
         	if (_awaveMemoryDirty) {
         		commitChannelData(); // make sure we're in sync
         	}
@@ -449,12 +451,14 @@ package com.noteflight.standingwave3.elements
        	 * This is one of our core-functions, as memory to memory adds are *extremely* fast.
        	 * @param source the IDirectAccessSource, with valid data at the sourceOffset
        	 * @param sourceOffset the number of frames into our source to begin mixing from, defaults to 0
-       	 * @param gain gain or attenuation of the source signal, as a factor, defaults to 1
+       	 * @param leftGain gain or attenuation of the source signal, mixed into the left
+       	 * @param rightGain gain or atten of source, mixed into the right
        	 * @param targetOffset the number of frames into this target sample at which to begin mixing, defaults to 0
        	 */
         public function mixInPanDirectAccessSource(source:IDirectAccessSource, sourceOffset:Number=0, leftGain:Number=1.0, rightGain:Number=1.0, targetOffset:Number=0, numFrames:Number=-1):void {
        		var thisSamplePointer:uint;
         	var mixSamplePointer:uint;
+        	
         	if (_awaveMemoryDirty) {
         		commitChannelData(); // make sure we're in sync
         	}

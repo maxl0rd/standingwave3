@@ -58,7 +58,7 @@
 				var violin:SoundSource = new SoundSource(new violinSample(), ad3);
 				
 				// Pump it through gain Filter 
-				var gf:GainFilter = new GainFilter(violin.clone(), 0.25);
+				var gf:GainFilter = new GainFilter(violin.clone(), -12);
 				
 				// Put it through a pan filter and add it to the performance
 				// Note that the whole performance must be either stereo or mono!
@@ -72,6 +72,7 @@
 				// See soundGeneratorTest() for a better way!
 				
 				var ap:AudioPerformer = new AudioPerformer(lp);
+				ap.mixGain = 0;
 				player.play(ap);
 			
 			}
@@ -93,7 +94,7 @@
 				lp.addSourceAt(7, vc.clone());
 				
 				var ap:AudioPerformer = new AudioPerformer(lp);
-				
+				ap.mixGain = -6;
 				var outCache:CacheFilter = new CacheFilter(ap);
 				
 				player.play(outCache);
@@ -149,7 +150,7 @@
 				lp.addSourceAt(4, sine1);
 								
 				var ap:AudioPerformer = new AudioPerformer(lp);
-				ap.mixGain = 0.25;
+				ap.mixGain = -12;
 				
 				var sf:StandardizeFilter = new StandardizeFilter(ap);
 				player.play(sf);
@@ -179,7 +180,7 @@
 				lp.addSourceAt(3, sine4);
 								
 				var ap:AudioPerformer = new AudioPerformer(lp);
-				ap.mixGain = 0.25;
+				ap.mixGain = -12;
 				
 				var sf:StandardizeFilter = new StandardizeFilter(ap);
 				player.play(sf);
@@ -267,7 +268,7 @@
 				lp.addSourceAt(17.5, r9.clone());
 				
 				var ap:AudioPerformer = new AudioPerformer(lp);  
-				ap.mixGain = 0.333;
+				ap.mixGain = -8;
 				
 				var sf:StandardizeFilter = new StandardizeFilter(ap);
 				player.play(sf);
@@ -296,7 +297,7 @@
 				lp.addSourceAt(4, ff2);
 				
 				var ap:AudioPerformer = new AudioPerformer(lp);
-				ap.mixGain = 0.25;
+				ap.mixGain = -12;
 				
 				// Standardize Filter turns it into 44.1k stereo, suitable for AudioPlayer
 				var sf:StandardizeFilter = new StandardizeFilter(ap);
@@ -343,12 +344,14 @@
 				var vc:CacheFilter = new CacheFilter(noise);
 				
 				var tf1:ToneControlFilter = new ToneControlFilter(vc.clone());
-				tf1.bass = 24; // bass boost
-				tf1.bassFrequency = 100;
+				tf1.bass = 12; // bass boost
+				tf1.bassFrequency = 120;
+				tf1.bassShape = ToneControlFilter.LOW_SHELF;
 				
 				var tf2:ToneControlFilter = new ToneControlFilter( vc.clone() );
-				tf2.treble = 24; // treble boost
-				tf2.trebleFrequency = 3000;
+				tf2.treble = 12; // treble boost
+				tf2.trebleFrequency = 4000;
+				tf2.trebleShape = ToneControlFilter.HIGH_SHELF;
 				
 				lp.addSourceAt(0, vc);
 				lp.addSourceAt(6, tf1);
@@ -379,7 +382,7 @@
 				
 				var ap:AudioPerformer = new AudioPerformer(lp); 
 				ap.duration = 20; // extend performance so we can hear the echos 
-				ap.mixGain = 1;
+				ap.mixGain = 0;
 				
 				var ef:EchoFilter = new EchoFilter(ap, 0.666, 0.5, 0.5);
 				

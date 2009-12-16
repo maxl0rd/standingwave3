@@ -19,6 +19,7 @@ package com.noteflight.standingwave3.performance
     import __AS3__.vec.Vector;
     
     import com.noteflight.standingwave3.elements.*;
+    import com.noteflight.standingwave3.utils.AudioUtils;
     
     /**
      * An AudioPerformer takes a Performance containing a queryable collection of
@@ -30,7 +31,7 @@ package com.noteflight.standingwave3.performance
     public class AudioPerformer implements IAudioSource
     {
     	/** Fixed gain factor to apply to all sources while mixing into the output buss */
-    	public var mixGain:Number = 1.0;
+    	public var mixGain:Number = 0.0;
     	
         private var _performance:IPerformance;
         private var _position:Number = 0;
@@ -113,6 +114,8 @@ package com.noteflight.standingwave3.performance
             // audio from performance events that intersect our time interval.
             var sample:Sample = new Sample(descriptor, numFrames);
             
+            var fgain:Number = AudioUtils.decibelsToFactor(mixGain);
+            
             // Maintain a list of all PerformanceElements known to be active at the current
             // audio cursor position.
             var _stillActive:Vector.<PerformanceElement> = new Vector.<PerformanceElement>();
@@ -152,11 +155,11 @@ package com.noteflight.standingwave3.performance
                 		var p:Number = element.source.position;
                 		// Mix it in, without using an intermediate sample
                 		IDirectAccessSource(element.source).useSample(activeLength); // element.source.position advances and caches if needed
-                		sample.mixInDirectAccessSource(IDirectAccessSource(element.source), p, mixGain, activeOffset, activeLength);
+                		sample.mixInDirectAccessSource(IDirectAccessSource(element.source), p, fgain, activeOffset, activeLength);
                 	} else {
                 		// Do a regular getSample, mix, and destroy
                     	var elementSample:Sample = element.source.getSample(activeLength);
-                    	sample.mixIn(elementSample, mixGain, activeOffset);
+                    	sample.mixIn(elementSample, fgain, activeOffset);
                     	elementSample.destroy();
                     }
                 }

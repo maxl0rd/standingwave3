@@ -16,7 +16,8 @@
 
 package com.noteflight.standingwave3.filters
 {
-    import com.noteflight.standingwave3.elements.*
+    import com.noteflight.standingwave3.elements.*;
+    import com.noteflight.standingwave3.utils.AudioUtils;
     
     /**
      * GainFilter applies a fixed gain factor to the underlying source.
@@ -26,7 +27,7 @@ package com.noteflight.standingwave3.filters
      */
     public class GainFilter extends AbstractFilter
     {
-        /** The gain factor applied. */
+        /** The gain factor applied, in decibels */
         public var gain:Number;
         
         /**
@@ -43,7 +44,8 @@ package com.noteflight.standingwave3.filters
         override public function getSample(numFrames:Number):Sample
         {
             var sample:Sample = _source.getSample(numFrames);
-           	sample.changeGain(gain);
+            var fgain:Number = AudioUtils.decibelsToFactor(gain);
+           	sample.changeGain(fgain);
             return sample;
         }
 

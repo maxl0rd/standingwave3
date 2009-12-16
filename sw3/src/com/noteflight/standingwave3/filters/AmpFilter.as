@@ -16,7 +16,8 @@
 
 package com.noteflight.standingwave3.filters
 {
-    import com.noteflight.standingwave3.elements.*
+    import com.noteflight.standingwave3.elements.*;
+    import com.noteflight.standingwave3.utils.AudioUtils;
     
     /**
      * AmpFilter multiplies the input with any generator.
@@ -29,7 +30,7 @@ package com.noteflight.standingwave3.filters
         /** Our envelope generator */
         private var _envelope:IDirectAccessSource;
         
-        /** An additional fixed gain multiplier **/
+        /** An additional fixed gain change applied, in db **/
         public var gain:Number;
         
         /**
@@ -41,7 +42,7 @@ package com.noteflight.standingwave3.filters
         {
             super(source);
             this._envelope = envelope;
-            this.gain = 1.0;
+            this.gain = 0.0;
             if (!AudioDescriptor.compare(source.descriptor, envelope.descriptor)) {
             	throw new Error ("Incompatible source and envelope descriptors.");
             }
@@ -65,7 +66,8 @@ package com.noteflight.standingwave3.filters
             _envelope.fill(_source.position); 
             
             // Shape our sample with the envelope signal
-            sample.multiplyInDirectAccessSource(_envelope, startPosition, gain, 0.0, numFrames);
+            var fgain:Number = AudioUtils.decibelsToFactor(gain);
+            sample.multiplyInDirectAccessSource(_envelope, startPosition, fgain, 0.0, numFrames);
             
             return sample;
         }

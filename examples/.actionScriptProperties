@@ -1,9 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <actionScriptProperties mainApplicationPath="StandingWave3.mxml" version="3">
 <compiler additionalCompilerArguments="-locale en_US" copyDependentFiles="true" enableModuleDebug="true" flexSDK="Flex 4.0 (Nightly)" generateAccessible="false" htmlExpressInstall="false" htmlGenerate="true" htmlHistoryManagement="false" htmlPlayerVersion="10.0.0" htmlPlayerVersionCheck="true" outputFolderPath="bin-debug" sourceFolderPath="src" strict="true" useApolloConfig="false" verifyDigests="true" warn="true">
-<compilerSourcePath>
-<compilerSourcePathEntry kind="1" linkType="1" path="/Users/mlord/Work/standingwave/sw3/src"/>
-</compilerSourcePath>
+<compilerSourcePath/>
 <libraryPath defaultLinkType="1">
 <libraryPathEntry kind="4" path="">
 <modifiedEntries>
@@ -28,7 +26,7 @@
 </modifiedEntries>
 </libraryPathEntry>
 <libraryPathEntry kind="1" linkType="1" path="libs"/>
-<libraryPathEntry kind="3" linkType="1" path="/Users/mlord/Work/standingwave/alchemy/awave.swc" useDefaultLinkType="false"/>
+<libraryPathEntry kind="1" linkType="1" path="/Users/mlord/Work/standingwave/sw3/bin"/>
 </libraryPath>
 <sourceAttachmentPath/>
 </compiler>
