@@ -16,14 +16,12 @@
 
 package com.noteflight.standingwave3.elements
 {
-    import __AS3__.vec.Vector;
-    
-    import cmodule.awave.CLibInit;
-    
-    import com.noteflight.standingwave3.utils.AudioUtils;
-    
-    import flash.media.Sound;
-    import flash.utils.ByteArray;
+	import __AS3__.vec.Vector;
+	
+	import cmodule.awave.CLibInit;
+	
+	import flash.media.Sound;
+	import flash.utils.ByteArray;
     
     /**
      * Sample is the fundamental audio source in StandingWave, and is the primary
@@ -55,10 +53,14 @@ package com.noteflight.standingwave3.elements
         /** Audio cursor position, expressed as a sample frame index. For use as an IAudioSource.  */
         protected var _position:Number;
 
+		
+
 		/** Statics for the singleton Alchemy Lib */
 		private static var _awave:Object;
 		private static var _awaveMemory:ByteArray; 
 		private static var ns:Namespace = new Namespace("cmodule.awave");
+		private static var _pool:MemoryPool;
+		
 		
         /**
          * Construct a new, empty Sample with some specified audio format. 
@@ -71,14 +73,19 @@ package com.noteflight.standingwave3.elements
         		// Creates the Alchemy C Lib when you first need a Sample
         		Sample.initAlchemicalWaveSingleton();
         	}
-            _descriptor = descriptor;
-            _channelData = new Array();  
-            _frames = numFrames;
-            if (_frames > 0) {
-             	_samplePointer = Sample._awave.allocateSampleMemory(numFrames, descriptor.channels);
-            } else {
+            this._descriptor = descriptor;
+            this._channelData = new Array();  
+            this._frames = numFrames;
+            if (_frames < 0) {
             	// Leaving this in for non-backwards compatibile situations
             	throw new Error("Zero length and variable size Samples are no longer supported in Standing Wave.");
+            }
+            var len:Number = numFrames * descriptor.channels;
+            // First try to get sample memory from the pool
+            this._samplePointer = _pool.fetch(len);
+            // If a pool-sourced buffer was not available, then allocate new memory
+            if (this._samplePointer == 0) {
+            	this._samplePointer = Sample._awave.allocateSampleMemory(numFrames, descriptor.channels);
             }
             _position = 0; 
         }
@@ -97,6 +104,23 @@ package com.noteflight.standingwave3.elements
         	var loader:CLibInit = new CLibInit();   
 			Sample._awave = loader.init();
 			Sample._awaveMemory = (ns::gstate).ds; //point to memory
+			Sample._pool = new MemoryPool(Sample._awave);
+        }
+        
+        /**
+         * Adds frames to the sample memory.
+         * The new sample will start with the existing sample data and be extended with zero samples.
+         * Reallocating samples larger than 10-20 seconds can be quite slow.
+         * @param numFrames the new total frameCount for this Sample    
+         */
+        public function realloc(numFrames:Number):void {
+        	if (numFrames < frameCount) {
+        		return;
+        	} else {
+        		_samplePointer = Sample._awave.reallocateSampleMemory(frameCount, numFrames, descriptor.channels);
+        		_frames = numFrames;
+        		invalidateChannelData();
+        	}
         }
         
         /* Basic accessors and IAudioSource stuff */
@@ -122,12 +146,12 @@ package com.noteflight.standingwave3.elements
          */
         public function clear():void
         {
-            Sample._awave.setSamples(getSamplePointer(), 0.0, _descriptor.rate, _descriptor.channels, _frames);
+            Sample._awave.setSamples(getSamplePointer(), _descriptor.channels, _frames, 0.0);
             invalidateChannelData();
         }    
         
         /**
-         * @inheritDoc
+         * @inheritDoc  
          */
         public function get descriptor():AudioDescriptor
         {
@@ -522,10 +546,12 @@ package com.noteflight.standingwave3.elements
        	 * @param tableSize the integer length in samples of the table (note the table should *actually* be tableSize+1 long, to allow for interpolation)
        	 * @param initalPhase a phasor normalized from 0-1
        	 * @param phaseAddPerFrame amount to add to this phasor per frame. typically frequency/samplerate
+       	 * @param phaseReset the phase to reset to when it runs off the end 
        	 * @param targetOffset offset into this sample to begin writing the resultant waveform
        	 * @param numFrames the number of frames to generate
+       	 * @returns The return value is the new phase angle after wave scanning. Reuse this phase in the next chunk to maintain constant scanning
        	 */  
-       	public function wavetableInDirectAccessSource(table:IDirectAccessSource, tableSize:int, initialPhase:Number, phaseAdd:Number, phaseReset:Number, targetOffset:Number, numFrames:Number):void {
+       	public function wavetableInDirectAccessSource(table:IDirectAccessSource, tableSize:int, initialPhase:Number, phaseAdd:Number, phaseReset:Number, targetOffset:Number, numFrames:Number):Number {
        		var thisSamplePointer:uint; 
         	var tableSamplePointer:uint;
         	if (_awaveMemoryDirty) {
@@ -537,9 +563,43 @@ package com.noteflight.standingwave3.elements
 			thisSamplePointer = getSamplePointer(targetOffset); // gen to this position
 			tableSamplePointer = table.getSamplePointer(); // gen from this position
 			numFrames = Math.min(numFrames, _frames - targetOffset); // don't mix more frames than are left in our target 
-			var settings:Object = {tableSize:tableSize, phase:initialPhase, phaseAdd:phaseAdd, phaseReset:phaseReset, pitchTable:0};
+			var settings:Object = {tableSize:tableSize, phase:initialPhase, phaseAdd:phaseAdd, phaseReset:phaseReset };
         	Sample._awave.wavetableIn(thisSamplePointer, tableSamplePointer, _descriptor.channels, Math.floor(numFrames), settings );
+        	// trace("New phase = " + settings.phase); 
         	invalidateChannelData();  
+        	return settings.phase;  
+       	} 
+       	
+       	/**
+       	 * Use a IDirectAccessSource as a wavetable, scanning it at a specified frequency
+       	 * and generating a new continuous waveform into this sample.
+       	 * The phase does not "reset" as wavetable does. Instead it can be passed a table for
+       	 * continuous pitch change.
+       	 * @param table the IDirectAccessSource to use as a wavetable
+       	 * @param tableSize the integer length in samples of the table (note the table should *actually* be tableSize+1 long, to allow for interpolation)
+       	 * @param initalPhase a phasor normalized from 0-1
+       	 * @param phaseAddPerFrame amount to add to this phasor per frame. typically frequency/samplerate
+       	 * @param targetOffset offset into this sample to begin writing the resultant waveform
+       	 * @param numFrames the number of frames to generate
+       	 * @returns The return value is the new phase angle after wave scanning. Reuse this phase in the next chunk to maintain constant scanning
+       	 */  
+       	public function waveModInDirectAccessSource(table:IDirectAccessSource, tableSize:int, initialPhase:Number, phaseAdd:Number, pitchTablePointer:uint, targetOffset:Number, numFrames:Number):Number {
+       		var thisSamplePointer:uint; 
+        	var tableSamplePointer:uint;
+        	if (_awaveMemoryDirty) {
+        		commitChannelData(); // make sure we're in sync
+        	}
+        	if (numFrames < 0) {
+        		numFrames = _frames; // if unspecified, mix into the entire sample
+        	}
+			thisSamplePointer = getSamplePointer(targetOffset); // gen to this position
+			tableSamplePointer = table.getSamplePointer(); // gen from this position
+			numFrames = Math.min(numFrames, _frames - targetOffset); // don't mix more frames than are left in our target 
+			var settings:Object = {tableSize:tableSize, phase:initialPhase, phaseAdd:phaseAdd, pitchTable:pitchTablePointer };
+        	Sample._awave.waveModIn(thisSamplePointer, tableSamplePointer, _descriptor.channels, Math.floor(numFrames), settings );
+        	trace("Wave Mod. New phase = " + settings.phase); 
+        	invalidateChannelData();  
+        	return settings.phase;
        	} 
        
        	/** 
@@ -577,8 +637,7 @@ package com.noteflight.standingwave3.elements
         	var tableSize:Number = source.frameCount - 1; // minus a guard sample for interpolation
         	var phase:Number = sourceOffset / source.frameCount; // phase = fractional progress through the source
         	var phaseAdd:Number = factor / source.frameCount;
-        	// pitchTable = unimplemented
-        	var settings:Object = {tableSize:tableSize, phase:phase, phaseAdd:phaseAdd, phaseReset:0, pitchTable:0};
+        	var settings:Object = {tableSize:tableSize, phase:phase, phaseAdd:phaseAdd, phaseReset:0};
         	Sample._awave.wavetableIn(thisSamplePointer, tableSamplePointer, _descriptor.channels, Math.floor(numFrames), settings );        	
         	invalidateChannelData();
         }
@@ -744,6 +803,16 @@ package com.noteflight.standingwave3.elements
         	}
         	
         }
+        
+        public function copy(source:Sample, type:int):void
+        {
+        	if (_awaveMemoryDirty) {
+        		commitChannelData();
+        	}
+        	Sample._awave.copy(getSamplePointer(), source.getSamplePointer(),
+        		 _descriptor.channels, _frames, type);
+        	invalidateChannelData();
+        }  
           
        
         /**
@@ -762,8 +831,11 @@ package com.noteflight.standingwave3.elements
         /**
          * Destroy the Sample and free the memory associated with it.
          */
-        public function destroy():void {
-        	Sample._awave.deallocateSampleMemory(_samplePointer);
+        public function destroy():void 
+        {
+        	// Offer the sample memory to the memory pool
+        	// If the pool doesn't want it, it'll be free'd
+        	_pool.release(_samplePointer, _frames * _descriptor.channels);
         	_samplePointer = 0; // null pointer
         	for (var c:Number = 0; c < channels; c++) {
         		_channelData[c] = null;
@@ -771,4 +843,73 @@ package com.noteflight.standingwave3.elements
         }
         
     }
+    
 }
+	
+	internal class MemoryPool
+	{
+		public var sizes:Array = [512, 1024, 2048, 4096, 8192];
+		public var pool:Object;
+		public var awave:Object;
+		
+		/**
+		 * This class manages a pool of small sample buffers for the Sample class.
+		 * Since the Alchemy lib's memory management can be kind of inefficient,
+		 * we gain a lot of speed by reusing a pool of small buffers.  
+		 */
+		public function MemoryPool(aw:Object)
+		{
+			awave = aw;	
+			pool = new Object();
+			for (var s:int; s < sizes.length; s++) {
+				pool[ sizes[s] ] = new Array();
+				fillPool( sizes[s] );
+			}
+		}
+	
+		private function fillPool(len:int):void
+		{
+			// add 64 empty sample buffers of this length to the pool
+			// store the pointers in the pool array
+			var sp:uint;
+			for (var b:int; b < 64; b++) {
+				sp = awave.allocateSampleMemory(len, 1);
+				pool[len].push(sp);
+			}
+		}
+	
+		/**
+		 * Pull a buffer of this size from the pool.
+		 * Returns 0 if there isn't one available.
+		 */
+		public function fetch(len:Number):uint
+		{
+			for (var s:int; s<sizes.length; s++) {
+				if (len == sizes[s] && pool[len].length > 0) {
+					// Here's one we can use
+					return pool[len].pop();
+				}
+			}
+			// Either it's not a size we're pooling, or we ran out
+			return 0;
+		}
+		
+		/**
+		 * Release a buffer of this size to the pool
+		 */
+		public function release(pointer:uint, len:Number):void
+		{
+			for (var s:int; s<sizes.length; s++) {
+				if (len == sizes[s] && pool[len].length < 64) {
+					// We'll add this buffer to the pool
+					pool[len].push(pointer);
+					// And zero it out
+					awave.setSamples(pointer, 1, len, 0.0);
+					return;
+				}
+			}
+			// Either it's not a size we're pooling, or we have enough of those.
+			// So we'll just free the memory
+			awave.deallocateSampleMemory(pointer);
+		}
+	}

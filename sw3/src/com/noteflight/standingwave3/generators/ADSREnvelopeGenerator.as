@@ -175,7 +175,7 @@ package com.noteflight.standingwave3.generators
 		 * The EnvelopeGenerator should be destroyed when no longer needed,
 		 * to free the sample memory.
 		 */
-		public function destroy():void {
+		override public function destroy():void {
 			_attackTable.destroy();
 			_decayTable.destroy();
 			_releaseTable.destroy();

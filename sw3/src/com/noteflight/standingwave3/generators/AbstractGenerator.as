@@ -155,5 +155,13 @@ package com.noteflight.standingwave3.generators
 				table.commitSlice(data, c, 0);
 			}
 		}
+		
+		/**
+		 * Destroy the generator when it is no longer needed, to free sample memory
+		 */
+		public function destroy():void 
+		{
+			_sample.destroy();
+		}
 	}
 }

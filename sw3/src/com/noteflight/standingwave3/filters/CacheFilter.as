@@ -16,7 +16,8 @@
 
 package com.noteflight.standingwave3.filters
 {
- 	import com.noteflight.standingwave3.elements.*
+ 	import com.noteflight.standingwave3.elements.*;
+    import flash.utils.getTimer;
     
     /**
      * This audio filter does not transform its underlying source.  It merely caches its
@@ -30,6 +31,7 @@ package com.noteflight.standingwave3.filters
         private var _cache:Sample;
         private var _position:Number;
         private var _source:IAudioSource;
+        
 
         public function CacheFilter(source:IAudioSource = null)
         {
@@ -49,12 +51,16 @@ package com.noteflight.standingwave3.filters
             _source = s;
             if (_source != null)
             {
-                resetPosition();
-
-                // reset our cached data if the source changes
+                resetPosition();                 
+                if (_cache) {
+                	_cache.destroy();
+                }
                 if (source.frameCount >= int.MAX_VALUE) {
-                	throw new Error("Cache filter no longer works with infinite sources!");
+                	// An infinite source needs to initialize a cache, and then realloc as it grows.
+                	// We will start the cache at 2 seconds, and then double the length any time a call to fill overruns
+                	_cache = new Sample(source.descriptor, source.descriptor.rate * 2);
                 } else {
+                	// We know how long the source is, so we'll make a cache sample exactly the right size
                 	_cache = new Sample(source.descriptor, source.frameCount);
                 }
                 
@@ -146,19 +152,30 @@ package com.noteflight.standingwave3.filters
                 toOffset = source.frameCount;
             }
             
+            if (toOffset > _cache.frameCount) { 
+            	// We need to grow the cache sample to accommodate this source
+            	// Double the size to save narsty realloc calls
+            	// Realloc is *not fast* for large caches so be careful with this
+            	// In general, realloc of anything north of 20 seconds is going to blow a sample event handler
+            	var oldTime:Number = getTimer();  
+            	_cache.realloc( _cache.frameCount*2 );
+            	var delta:Number = getTimer() - oldTime;
+            	// trace("Reallocated cache sample to " + _cache.frameCount + " in " + delta + " ms.");
+            }
+            
             if (toOffset > source.position)
             {
                 // An uncached run of data is being retrieved; add it to the cache by calling
                 // getSample() on the source and copying that into the cache.  This advances the
                 // cursor position of the source, which records how much of it has been cached
-                // downstream in this CacheFilter.
+                // downstream in this CacheFilter. 
                 //
                 var fromOffset:Number = source.position;
                 var numFrames:Number = toOffset - source.position;
                 
                 var sample:Sample = source.getSample(numFrames);
                 _cache.mixIn(sample, 1.0, fromOffset); // concats the sample to the cache
-                sample.destroy();
+                sample.destroy(); 
              }
         }
         

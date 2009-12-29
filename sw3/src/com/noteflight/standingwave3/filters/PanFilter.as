@@ -85,7 +85,7 @@ package com.noteflight.standingwave3.filters
 			_leftGain *= AudioUtils.decibelsToFactor(_gain);
 			_rightGain *= AudioUtils.decibelsToFactor(_gain);
 		}
-		
+		 
 		override public function getSample(numFrames:Number):Sample 
 		{
 			var sample:Sample = _source.getSample(numFrames);

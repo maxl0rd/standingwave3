@@ -62,6 +62,24 @@ package com.noteflight.standingwave3.utils
         }
         
         /**
+         * Convert a "midi note number" to a frequency.
+         * By convention A4 = 69 = 440 Hz
+         * but you can provide a reference to override the tuning reference.
+         */ 
+        public static function noteNumberToFrequency(noteNum:Number, refFreq:Number = 440):Number 
+        {
+        	return refFreq * Math.pow(2, (noteNum-69)/12 );
+        }
+        
+        /** 
+         * Convert a frequency to midi note number
+         */
+        public static function frequencyToNoteNumber(frequency:Number, refFreq:Number = 440):Number 
+        {
+        	return 69 + 12 * Math.log(frequency / refFreq);
+        }
+        
+        /**
          * Obtain an IRandomAccessSource for a given audio source by caching it if necessary. 
          */
         public static function toRandomAccessSource(source:IAudioSource):IRandomAccessSource

@@ -84,7 +84,7 @@ package com.noteflight.standingwave3.generators
 		 * The generator should be destroyed when no longer needed,
 		 * to free the sample memory.
 		 */
-		public function destroy():void {
+		override public function destroy():void {
 			_envTable.destroy();
 			_sample.destroy();
 			_sample = null;

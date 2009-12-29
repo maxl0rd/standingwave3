@@ -3,7 +3,7 @@
  *  Part of Standing Wave 3
  *  Alchemy <-> AS3 Bridge for audio synthesis 
  *
- *  Created by Max Lord on 11/21/09.
+ *  maxlord@gmail.com
  *
  */
 
@@ -24,9 +24,24 @@ float pi    = 3.1415926535897932384626433832795029;
 float twopi = 6.2831853071795864769252867665590058;
 char trace[100];
 
+// A *large* lookup table for midi note number to frequency conversion
+// 64 steps for each of the 128 midi note numbers, large enough to not interpolate
+float noteToFreqLookup[8192]; 
+
 static inline float interpolate(float sample1, float sample2, float fraction)
 {
 	return sample1 + fraction * (sample2-sample1);
+}
+ 
+/* Returns a frequency in Hz for a midi note number */
+static inline float noteToFreq(float note) {
+	return noteToFreqLookup[ (int)(note*64) ];
+}
+
+/* Returns a frequency shift factor from a semitone shift number -- ie. +12 semitones = 2x frequency */
+static inline float shiftToFreq(float shift) {
+	// Yea, obscurity zone
+	return noteToFreqLookup[ (int)((69+shift)*64) ] * .00227273;
 }
  
  
@@ -47,13 +62,37 @@ static AS3_Val allocateSampleMemory(void* self, AS3_Val args)
 	AS3_ArrayValue(args, "IntType, IntType", &frames, &channels);
  
 	size = frames * channels * sizeof(float);
-	// sprintf(trace, "New sample %d bytes", size);
-	// sztrace(trace);
-	
 	buffer = (float *) malloc(size); 
 	memset(buffer, 0, size);
 	
 	// Return the sample pointer
+	return AS3_Int((int)buffer);  
+}
+
+/**
+ * Increases the memory allocation for this sample pointer
+ */
+static AS3_Val reallocateSampleMemory(void* self, AS3_Val args)
+{
+	int newframes;
+	int oldframes;
+	int channels;
+	int newsize;
+	int oldsize;
+	float *buffer;
+	
+	AS3_ArrayValue(args, "IntType, IntType, IntType", &oldframes, &newframes, &channels);
+ 
+	oldsize = oldframes * channels * sizeof(float);
+	newsize = newframes * channels * sizeof(float);
+	
+	// realloc is slow :(
+	buffer = (float *) realloc(buffer, newsize); 
+	
+	// zero out the new memory 
+	memset( buffer + oldframes*channels, 0, newsize - oldsize);
+	
+	// Return the new sample pointer
 	return AS3_Int((int)buffer);  
 }
  
@@ -72,16 +111,17 @@ static AS3_Val deallocateSampleMemory(void *self, AS3_Val args)
 } 
  
 /**
- * Fast sample sample memory copy
+ * Fast sample memory copy between sample pointers
  */
-static AS3_Val copy(void *self, AS3_Val args) 
+ static AS3_Val copy(void *self, AS3_Val args) 
 {
 	int bufferPosition; int channels; int frames;
 	float *buffer;
 	int sourceBufferPosition;
 	float *sourceBuffer;
+	int type;
 	
-	AS3_ArrayValue(args, "IntType, IntType, IntType, IntType", &bufferPosition, &sourceBufferPosition, &channels, &frames);
+	AS3_ArrayValue(args, "IntType, IntType, IntType, IntType, IntType", &bufferPosition, &sourceBufferPosition, &channels, &frames, &type);
 	buffer = (float *) bufferPosition;
 	sourceBuffer = (float *) sourceBufferPosition;
 	
@@ -156,8 +196,47 @@ static AS3_Val setSamples(void *self, AS3_Val args)
 	value = (float) valueArg;
 	
 	count = frames * channels;
-	while (count--) {
-		*buffer++ = value;
+	if (count % 32 == 0) {
+		// I love to unroll, love to unroll
+		count /= 32;
+		while (count--) {
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+			*buffer++ = value;
+		}
+	} else {
+		while (count--) {
+			*buffer++ = value;
+		}
 	}
 
 	return 0;
@@ -216,13 +295,123 @@ static AS3_Val mixIn(void *self, AS3_Val args)
 	
 	count = frames;
 	if (channels == 1) {
-		while (count--) {
-			*buffer++ += *sourceBuffer++ * leftGain; 
+		if (count % 32 == 0) {
+			// Massive unrolling optimization. Yes, this looks retarded, but it's 3x faster
+			count /= 32;
+			while (count--) {
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain;
+				*buffer++ += *sourceBuffer++ * leftGain;  
+			}
+		} else {
+			while (count--) {
+				*buffer++ += *sourceBuffer++ * leftGain; 
+			}
 		}
 	} else if (channels == 2) {
-		while (count--) {
-			*buffer++ += *sourceBuffer++ * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
+		if (count % 32 == 0) {
+			count /= 32;
+			while (count--) {
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+
+			}
+		} else {
+			while (count--) {
+				*buffer++ += *sourceBuffer++ * leftGain; 		
+				*buffer++ += *sourceBuffer++ * rightGain;
+			}
 		}
 	}
 	return 0;
@@ -252,9 +441,80 @@ static AS3_Val mixInPan(void *self, AS3_Val args)
 	rightGain = (float) rightGainArg;	
 	count = frames;
 	
-	while (count--) {
-		*buffer++ += *sourceBuffer * leftGain; 		
-		*buffer++ += *sourceBuffer++ * rightGain;
+	if (count % 32 == 0) {
+		// Again, unroll 32x
+		count /= 32;
+		while (count--) {
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+		}
+	} else {
+		while (count--) {
+			*buffer++ += *sourceBuffer * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+		}
 	}
 
 	return 0;
@@ -278,15 +538,49 @@ static AS3_Val multiplyIn(void *self, AS3_Val args)
 	buffer = (float *) bufferPosition;
 	sourceBuffer = (float *) sourceBufferPosition; 
 	gain = (float) gainArg;
-	count = frames;
 	
-	if (channels == 1) {
+	count = frames * channels;
+	
+	if (count % 32 == 0) {
+		// Unrolling this loop 32x dramatically increases performance.
+		// This will work with almost all buffer sizes, which should be factors of 2
+		count /= 32;
 		while (count--) {
 			*buffer++ *= *sourceBuffer++ * gain; 
+			*buffer++ *= *sourceBuffer++ * gain;
+			*buffer++ *= *sourceBuffer++ * gain;
+			*buffer++ *= *sourceBuffer++ * gain;
+			*buffer++ *= *sourceBuffer++ * gain;
+			*buffer++ *= *sourceBuffer++ * gain;
+			*buffer++ *= *sourceBuffer++ * gain;
+			*buffer++ *= *sourceBuffer++ * gain;
+			*buffer++ *= *sourceBuffer++ * gain; 
+			*buffer++ *= *sourceBuffer++ * gain;
+			*buffer++ *= *sourceBuffer++ * gain;
+			*buffer++ *= *sourceBuffer++ * gain;
+			*buffer++ *= *sourceBuffer++ * gain;
+			*buffer++ *= *sourceBuffer++ * gain;
+			*buffer++ *= *sourceBuffer++ * gain;
+			*buffer++ *= *sourceBuffer++ * gain;
+			*buffer++ *= *sourceBuffer++ * gain; 
+			*buffer++ *= *sourceBuffer++ * gain;
+			*buffer++ *= *sourceBuffer++ * gain;
+			*buffer++ *= *sourceBuffer++ * gain;
+			*buffer++ *= *sourceBuffer++ * gain;
+			*buffer++ *= *sourceBuffer++ * gain;
+			*buffer++ *= *sourceBuffer++ * gain;
+			*buffer++ *= *sourceBuffer++ * gain;
+			*buffer++ *= *sourceBuffer++ * gain; 
+			*buffer++ *= *sourceBuffer++ * gain;
+			*buffer++ *= *sourceBuffer++ * gain;
+			*buffer++ *= *sourceBuffer++ * gain;
+			*buffer++ *= *sourceBuffer++ * gain;
+			*buffer++ *= *sourceBuffer++ * gain;
+			*buffer++ *= *sourceBuffer++ * gain;
+			*buffer++ *= *sourceBuffer++ * gain;
 		}
-	} else if (channels == 2) {
+	} else {
 		while (count--) {
-			*buffer++ *= *sourceBuffer++ * gain; 		
 			*buffer++ *= *sourceBuffer++ * gain;
 		}
 	}
@@ -303,8 +597,6 @@ static AS3_Val wavetableIn(void *self, AS3_Val args)
 	float *buffer; 
 	int sourceBufferPosition;
 	float *sourceBuffer;
-	int pitchTablePosition;
-	float *pitchTable;
 	double phaseArg; float phase;
 	double phaseAddArg; float phaseAdd;
 	double phaseResetArg; float phaseReset;
@@ -315,17 +607,14 @@ static AS3_Val wavetableIn(void *self, AS3_Val args)
 	
 	AS3_ArrayValue(args, "IntType, IntType, IntType, IntType, AS3ValType", 
 		&bufferPosition, &sourceBufferPosition, &channels, &frames, &settings);
-	AS3_ObjectValue(settings, "tableSize:IntType, phase:DoubleType, phaseAdd:DoubleType, phaseReset:DoubleType, pitchTable:IntType",
-		&tableSize, &phaseArg, &phaseAddArg, &phaseResetArg, &pitchTablePosition);
+	AS3_ObjectValue(settings, "tableSize:IntType, phase:DoubleType, phaseAdd:DoubleType, phaseReset:DoubleType",
+		&tableSize, &phaseArg, &phaseAddArg, &phaseResetArg);
 
 	buffer = (float *) bufferPosition;
 	sourceBuffer = (float *) sourceBufferPosition; 
-	pitchTable = (float *) pitchTablePosition;
 	phaseAdd = (float) phaseAddArg * tableSize; // num source frames to add per output frames
 	phase = (float) phaseArg * tableSize; // translate into a frame count into the table
 	phaseReset = (float) phaseResetArg * tableSize;
-		
-	// pitch table based manipulation is still unimplemented	
 		
 	// Make sure we got everything right
 	// sprintf(trace, "Wavetable size=%d phase=%f phaseAdd=%f", tableSize, phase, phaseAdd);
@@ -339,11 +628,9 @@ static AS3_Val wavetableIn(void *self, AS3_Val args)
 				phase -= tableSize; // wrap phase to the loop point
 				phase += phaseReset;
 			}
-			intPhase = floor(phase); // int phase
+			intPhase = (int) phase; // int phase
 			wavetablePosition = sourceBuffer + intPhase;
 			*buffer++ = interpolate(*wavetablePosition, *(wavetablePosition+1), phase - intPhase);
-			// sprintf(trace, "out=%f", *(buffer-1));
-			// sztrace(trace);
 			phase += phaseAdd; 
 		}
 	} else if (channels == 2 ) {
@@ -352,7 +639,7 @@ static AS3_Val wavetableIn(void *self, AS3_Val args)
 				phase -= tableSize; // wrap phase to the loop point
 				phase += phaseReset;
 			}
-			intPhase = floor(phase*0.5)*2; // int phase, round to even frames, for each stereo frame pair
+			intPhase = ((int)(phase*0.5))*2; // int phase, round to even frames, for each stereo frame pair
 			wavetablePosition = sourceBuffer + intPhase;
 			*buffer++ = interpolate(*wavetablePosition, *(wavetablePosition+2), phase - intPhase);
 			*buffer++ = interpolate(*(wavetablePosition+1), *(wavetablePosition+3), phase - intPhase);
@@ -360,8 +647,74 @@ static AS3_Val wavetableIn(void *self, AS3_Val args)
 		}
 	}
 	
+	// Scale back down to a factor, and write the final phase value back to AS3
+	phase /= tableSize;
+	AS3_Set(settings, AS3_String("phase"), AS3_Number(phase));
+	
 	return 0;
 }
+
+/**
+ * Scan in another wavetable with an accessory pitch shift table.
+ * Wavetable should be at least one longer than the table size.
+ */
+static AS3_Val waveModIn(void *self, AS3_Val args)
+{
+	AS3_Val settings;
+	int bufferPosition; int channels; int frames;
+	float *buffer; 
+	int sourceBufferPosition;
+	float *sourceBuffer;
+	int pitchTablePosition;
+	float *pitchTable;
+	double phaseArg; float phase;
+	double phaseAddArg; float phaseAdd;
+	int tableSize;
+	int count; 
+	int intPhase;
+	float *wavetablePosition;
+	
+	AS3_ArrayValue(args, "IntType, IntType, IntType, IntType, AS3ValType", 
+		&bufferPosition, &sourceBufferPosition, &channels, &frames, &settings);
+	AS3_ObjectValue(settings, "tableSize:IntType, phase:DoubleType, phaseAdd:DoubleType, pitchTable:IntType",
+		&tableSize, &phaseArg, &phaseAddArg, &pitchTablePosition);
+
+	buffer = (float *) bufferPosition;
+	sourceBuffer = (float *) sourceBufferPosition; 
+	pitchTable = (float *) pitchTablePosition; // pitch shift in note numbers per frame
+	phaseAdd = (float) phaseAddArg * tableSize; // num source frames to add per output frames
+	phase = (float) phaseArg * tableSize; // translate into a frame count into the table
+		
+	// waveModIn does not loop, so phase does not reset
+	count=frames;
+	if (channels == 1) {
+		while (count--) {
+			intPhase = (int) phase; // int phase
+			wavetablePosition = sourceBuffer + intPhase;
+			*buffer++ = interpolate(*wavetablePosition, *(wavetablePosition+1), phase - intPhase);
+			// sprintf(trace, "out=%f", *(buffer-1));
+			// sztrace(trace);
+			
+			// now we have to advance phase by the phaseAdd plus the pitch shift so...
+			phase += phaseAdd * shiftToFreq(*pitchTable++); 
+		}
+	} else if (channels == 2 ) {
+		while (count--) {
+			intPhase = ((int)(phase*0.5))*2; // int phase, round to even frames, for each stereo frame pair
+			wavetablePosition = sourceBuffer + intPhase;
+			*buffer++ = interpolate(*wavetablePosition, *(wavetablePosition+2), phase - intPhase);
+			*buffer++ = interpolate(*(wavetablePosition+1), *(wavetablePosition+3), phase - intPhase);
+			phase += phaseAdd * shiftToFreq(*pitchTable++); 
+		}
+	}
+	
+	// Scale back down to a factor, and write the final phase value back to AS3
+	phase /= tableSize;
+	AS3_Set(settings, AS3_String("phase"), AS3_Number(phase));
+	
+	return 0;
+}
+
 
 static AS3_Val delay(void *self, AS3_Val args)
 {
@@ -531,11 +884,28 @@ static AS3_Val biquad(void *self, AS3_Val args)
 	return 0;
 }
 
+
+
+static int fillNoteLookupTable()
+{
+	int b;
+	float n = 0.0;
+	
+	for (b=0; b<8192; b++) {
+		// Concert A = Note 69 = 440Hz. DEAL
+		noteToFreqLookup[b] = (float)(440 * pow(2.0, (n-69)/12));
+		n += 0.015625; // 1/64
+	}
+	return 0;
+}
+
+
 int main()
 {
 	// Create method objects
 	AS3_Val allocateSampleMemoryMethod = AS3_Function(NULL, allocateSampleMemory);
-	AS3_Val deallocateSampleMemoryMethod = AS3_FunctionAsync(NULL, deallocateSampleMemory); //  deallocate asynchronously seems to work better!
+	AS3_Val reallocateSampleMemoryMethod = AS3_Function(NULL, reallocateSampleMemory);
+	AS3_Val deallocateSampleMemoryMethod = AS3_FunctionAsync(NULL, deallocateSampleMemory); //  deallocate asynchronously seems to work better?
 	AS3_Val setSamplesMethod = AS3_Function(NULL, setSamples);
 	AS3_Val changeGainMethod = AS3_Function(NULL, changeGain);
 	AS3_Val copyMethod = AS3_Function(NULL, copy);
@@ -544,15 +914,17 @@ int main()
 	AS3_Val multiplyInMethod = AS3_Function(NULL, multiplyIn);
 	AS3_Val standardizeMethod = AS3_Function(NULL, standardize);
 	AS3_Val wavetableInMethod = AS3_Function(NULL, wavetableIn);
+	AS3_Val waveModInMethod = AS3_Function(NULL, waveModIn);
 	AS3_Val delayMethod = AS3_Function(NULL, delay);
 	AS3_Val biquadMethod = AS3_Function(NULL, biquad);
   
 	// Make a ginormous object with all the lib's methods
-	AS3_Val result = AS3_Object("allocateSampleMemory:AS3ValType, setSamples:AS3ValType, deallocateSampleMemory:AS3ValType, copy:AS3ValType, changeGain:AS3ValType, mixIn:AS3ValType, mixInPan:AS3ValType, multiplyIn:AS3ValType, standardize:AS3ValType, wavetableIn:AS3ValType, delay:AS3ValType, biquad:AS3ValType", 
-		allocateSampleMemoryMethod, setSamplesMethod, deallocateSampleMemoryMethod, copyMethod, changeGainMethod, mixInMethod, mixInPanMethod, multiplyInMethod, standardizeMethod, wavetableInMethod, delayMethod, biquadMethod);
+	AS3_Val result = AS3_Object("allocateSampleMemory:AS3ValType, reallocateSampleMemory:AS3ValType, setSamples:AS3ValType, deallocateSampleMemory:AS3ValType, copy:AS3ValType, changeGain:AS3ValType, mixIn:AS3ValType, mixInPan:AS3ValType, multiplyIn:AS3ValType, standardize:AS3ValType, wavetableIn:AS3ValType, waveModIn:AS3ValType, delay:AS3ValType, biquad:AS3ValType", 
+		allocateSampleMemoryMethod, reallocateSampleMemoryMethod, setSamplesMethod, deallocateSampleMemoryMethod, copyMethod, changeGainMethod, mixInMethod, mixInPanMethod, multiplyInMethod, standardizeMethod, wavetableInMethod, waveModInMethod, delayMethod, biquadMethod);
 	 
 	// Free memory
 	AS3_Release(allocateSampleMemoryMethod);
+	AS3_Release(reallocateSampleMemoryMethod);
 	AS3_Release(deallocateSampleMemoryMethod);
 	AS3_Release(setSamplesMethod);
 	AS3_Release(copyMethod);
@@ -562,8 +934,12 @@ int main()
 	AS3_Release(multiplyInMethod);
 	AS3_Release(standardizeMethod);
 	AS3_Release(wavetableInMethod);
+	AS3_Release(waveModInMethod);
 	AS3_Release(delayMethod);
 	AS3_Release(biquadMethod);
+	
+	// make our note number to frequency lookup table
+	fillNoteLookupTable();
 	
 	// notify that we initialized -- THIS DOES NOT RETURN!
 	AS3_LibInit(result);

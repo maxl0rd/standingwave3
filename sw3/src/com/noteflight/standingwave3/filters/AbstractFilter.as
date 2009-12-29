@@ -23,7 +23,7 @@ package com.noteflight.standingwave3.filters
      * An abstract implementation of the IAudioFilter interface that can be
      * overridden to supply the specific transformation for a specific filter subclass. 
      */
-    public class AbstractFilter implements IAudioFilter
+    public class AbstractFilter implements IAudioFilter   
     {
         /** The underlying source that acts as input to this filter. */        
         protected var _source:IAudioSource;

@@ -14,7 +14,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 
-package com.noteflight.standingwave3.elements
+package com.noteflight.standingwave3.elements          
 {
     /**
      * An AudioDescriptor describes the characteristics of an audio stream in terms of
@@ -26,7 +26,7 @@ package com.noteflight.standingwave3.elements
     {
         // Audio-related constants
         public static const CHANNELS_MONO:uint = 1;
-        public static const CHANNELS_STEREO:uint = 2;
+        public static const CHANNELS_STEREO:uint = 2; 
         
         public static const RATE_44100:uint = 44100;
         public static const RATE_22050:uint = 22050;
