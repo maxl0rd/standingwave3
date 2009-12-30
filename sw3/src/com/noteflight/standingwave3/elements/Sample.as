@@ -401,14 +401,14 @@ package com.noteflight.standingwave3.elements
         	}
         }
         
-        /* Sample manipulations that use the new fast AlchemicalWave libs */
-        
+        /* Sample manipulations that use the new fast AlchemicalWave libs */       
+          
         
         /**
          * Set a range of frames to a fixed sample value 
          * @param value the numerical value to set all samples to
-         * @param targetOffset the offset into the sample to start modifying
-         * @param numFrames the number of continuous frames to set
+         * @param targetOffset the offset into the sample to start modifying      
+         * @param numFrames the number of continuous frames to set  
          */
         public function setSamples(value:Number, targetOffset:Number, numFrames:Number):void
         {
@@ -420,7 +420,7 @@ package com.noteflight.standingwave3.elements
          * Mix another whole Sample into this sample. They should have the same descriptor.
          * @param sourceSample the sample to mix in
          * @param gain the gain or attenuation of the source signal
-         * @param offset the number of frames into this target sample at which to begin mixing
+         * @param offset the number of frames into this target sample at which to begin mixing  
          */ 
         public function mixIn(sourceSample:Sample, gain:Number=0.0, offset:Number=0):void 
         {

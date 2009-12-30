@@ -28,9 +28,18 @@ char trace[100];
 // 64 steps for each of the 128 midi note numbers, large enough to not interpolate
 float noteToFreqLookup[8192]; 
 
-static inline float interpolate(float sample1, float sample2, float fraction)
-{
+static inline float interpolate(float sample1, float sample2, float fraction) {
 	return sample1 + fraction * (sample2-sample1);
+}
+
+static inline float cubicInterpolate( float y0, float y1, float y2, float y3, float mu) {
+   float a0,a1,a2,a3,mu2;
+   mu2 = mu*mu;
+   a0 = y3 - y2 - y0 + y1;
+   a1 = y0 - y1 - a0;
+   a2 = y2 - y0;
+   a3 = y1;
+   return(a0*mu*mu2+a1*mu2+a2*mu+a3);
 }
  
 /* Returns a frequency in Hz for a midi note number */
@@ -146,30 +155,66 @@ static AS3_Val standardize(void *self, AS3_Val args)
 	buffer = (float *) bufferPosition;
 	sourceBuffer = (float *) sourceBufferPosition;
 
-	// TODO: Implement a nice interpolating upsampling algorithm for conversion from 22050 to 44100
-
 	if (rate == 44100 && channels == 2) {
 		// We're already standardized. Just copy the memory
 		memcpy(buffer, sourceBuffer, frames * channels * sizeof(float));
 	} else if (rate == 22050 && channels == 1) {
-		// Upsample and stereoize
-		count = frames/2;
-		while (count--) {
+		// Upsample and stereoize with cubic interpolation
+		// First set hold first sample
+		*buffer++ = *sourceBuffer;
+		*buffer++ = *sourceBuffer;
+		*buffer++ = cubicInterpolate(*(sourceBuffer), *(sourceBuffer), *(sourceBuffer+1), *(sourceBuffer+2), 0.5); 
+		*buffer = *(buffer-1);
+		buffer++; sourceBuffer++;
+		// Loop
+		count = (frames/2) - 2;
+		while (--count) {
 			*buffer++ = *sourceBuffer;
 			*buffer++ = *sourceBuffer;
-			*buffer++ = *sourceBuffer; 
-			*buffer++ = *sourceBuffer++;
+			*buffer++ = cubicInterpolate(*(sourceBuffer-1), *sourceBuffer, *(sourceBuffer+1), *(sourceBuffer+2), 0.5); 
+			*buffer = *(buffer-1);
+			buffer++; sourceBuffer++;
 		}		
+		// Last set hold 2 samples
+		*buffer++ = *sourceBuffer;
+		*buffer++ = *sourceBuffer;
+		*buffer++ = cubicInterpolate(*(sourceBuffer-1), *sourceBuffer, *(sourceBuffer+1), *(sourceBuffer+1), 0.5); 
+		*buffer = *(buffer-1);
+		buffer++; sourceBuffer++;
+		*buffer++ = *sourceBuffer;
+		*buffer++ = *sourceBuffer;
+		*buffer++ = cubicInterpolate(*(sourceBuffer-1), *sourceBuffer, *sourceBuffer, *sourceBuffer, 0.5); 
+		*buffer = *(buffer-1);
+		// Done
 	} else if (rate == 22050 && channels == 2) {
-		// Upsample 
-		count = frames/2;
-		while (count--) {
-			*buffer++ = *sourceBuffer;
-			*buffer++ = *(sourceBuffer+1);
-			*buffer++ = *sourceBuffer;
-			*buffer++ = *(sourceBuffer+1);
+		// Upsample with cubic interpolation 
+		// First set hold sample
+		*buffer++ = *sourceBuffer;
+		*buffer++ = *(sourceBuffer+1);
+		*buffer++ = cubicInterpolate(*sourceBuffer, *sourceBuffer, *(sourceBuffer+2), *(sourceBuffer+4), 0.5); 
+		*buffer = cubicInterpolate(*(sourceBuffer+1), *(sourceBuffer+1), *(sourceBuffer+3), *(sourceBuffer+5), 0.5); 
+		buffer++;
+		sourceBuffer += 2;
+		count = frames/2 - 2;
+		while (--count) {
+			*buffer++ = *sourceBuffer; // left
+			*buffer++ = *(sourceBuffer+1); // right
+			*buffer++ = cubicInterpolate(*(sourceBuffer-2), *sourceBuffer, *(sourceBuffer+2), *(sourceBuffer+4), 0.5); 
+			*buffer++ = cubicInterpolate(*(sourceBuffer-1), *(sourceBuffer+1), *(sourceBuffer+3), *(sourceBuffer+5), 0.5);
 			sourceBuffer += 2;
-		}		
+		}
+		// second to last set		
+		*buffer++ = *sourceBuffer; // left
+		*buffer++ = *(sourceBuffer+1); // right
+		*buffer++ = cubicInterpolate(*(sourceBuffer-2), *sourceBuffer, *(sourceBuffer+2), *(sourceBuffer+2), 0.5); 
+		*buffer++ = cubicInterpolate(*(sourceBuffer-1), *(sourceBuffer+1), *(sourceBuffer+3), *(sourceBuffer+3), 0.5);
+		sourceBuffer += 2;
+		// last set
+		*buffer++ = *sourceBuffer; // left
+		*buffer++ = *(sourceBuffer+1); // right
+		*buffer++ = cubicInterpolate(*(sourceBuffer-2), *sourceBuffer, *sourceBuffer, *sourceBuffer, 0.5); 
+		*buffer= cubicInterpolate(*(sourceBuffer-1), *(sourceBuffer+1), *(sourceBuffer+1), *(sourceBuffer+1), 0.5);
+		// Done
 	} else if (rate == 44100 && channels == 1) {
 		// Stereoize
 		count = frames;
