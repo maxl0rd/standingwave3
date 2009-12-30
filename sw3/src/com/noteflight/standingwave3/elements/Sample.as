@@ -32,7 +32,7 @@ package com.noteflight.standingwave3.elements
      * Alternatively, the sample data can be requested as a Vector of Numbers, manipulated,
      * and then committed back to the sample memory.
      */
-    public class Sample implements IAudioSource, IRandomAccessSource, IDirectAccessSource
+    public final class Sample implements IAudioSource, IRandomAccessSource, IDirectAccessSource
     {
     	/** Uint "pointer" to the sample memory in the awave. */
     	protected var _samplePointer:uint;
@@ -550,7 +550,7 @@ package com.noteflight.standingwave3.elements
        	 * @param targetOffset offset into this sample to begin writing the resultant waveform
        	 * @param numFrames the number of frames to generate
        	 * @returns The return value is the new phase angle after wave scanning. Reuse this phase in the next chunk to maintain constant scanning
-       	 */  
+       	 */    
        	public function wavetableInDirectAccessSource(table:IDirectAccessSource, tableSize:int, initialPhase:Number, phaseAdd:Number, phaseReset:Number, targetOffset:Number, numFrames:Number):Number {
        		var thisSamplePointer:uint; 
         	var tableSamplePointer:uint;
@@ -786,23 +786,27 @@ package com.noteflight.standingwave3.elements
          * The AudioSampleHandler calls this to read a sample out to the final output ByteArray.
          * @param outputBytes the output ByteArray
          * @param offset the 
-         */
-        public function readBytes(outputBytes:ByteArray, offset:Number=0, numFrames:Number=-1):void 
+         */ 
+        public function writeBytes(destBytes:ByteArray, offset:Number=0, numFrames:Number=-1):void 
         {
         	if (numFrames < 0) {
         		numFrames = _frames; // if unspecified, write the whole sample
         	}
         	
         	// There should be a way to do this with a single writeBytes() call maybe...?  
-        	      	
+        	/*      	
         	outputBytes.position = 0;
         	_awaveMemory.position = getSamplePointer(offset);
         	for (var s:int=0; s < numFrames; s++) {
         		outputBytes.writeFloat( _awaveMemory.readFloat() ); // left
         		outputBytes.writeFloat( _awaveMemory.readFloat() ); // right
         	}
-        	
-        }
+        	*/
+        	var aw:ByteArray = Sample._awaveMemory;
+        	destBytes.endian = "littleEndian";
+        	Sample._awave.writeBytes(getSamplePointer(offset), destBytes, _descriptor.channels, _frames);
+        	 
+        } 
         
         public function copy(source:Sample, type:int):void
         {

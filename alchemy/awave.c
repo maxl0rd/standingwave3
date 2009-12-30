@@ -747,31 +747,18 @@ static AS3_Val delay(void *self, AS3_Val args)
 	// sprintf(trace, "Echo length=%d, dry=%f, wet=%f, fb=%f", length, dryMix, wetMix, feedback); 
 	// sztrace(trace);
 	
-	if (channels == 1) {
-		count = frames;
-		while (count--) {
-			if (offset > length) { 
-				offset = 0; 
-			}
-			echoPointer = ringBuffer + offset;
-			echo = *echoPointer;
-			*echoPointer = *buffer + echo*feedback;
-			*buffer = *buffer * dryMix + echo * wetMix;
-			buffer++; offset++;
-		}		
-	} else if (channels == 2) {
-		count = frames*2;
-		while (count--) {
-			if (offset > length) { 
-				offset = 0; 
-			}
-			echoPointer = ringBuffer + offset;
-			echo = *echoPointer;
-			*echoPointer = *buffer + (echo * feedback);
-			*buffer = *buffer * dryMix + echo * wetMix;
-			buffer++; offset++;
-		}		
-	}
+	count = frames * channels;
+	while (count--) {
+		if (offset > length) { 
+			offset = 0; 
+		}
+		echoPointer = ringBuffer + offset;
+		echo = *echoPointer;
+		*echoPointer = *buffer + echo*feedback;
+		*buffer = *buffer * dryMix + echo * wetMix + 1e-15 - 1e-15;
+		buffer++; offset++;
+	}		
+	
 	
 	// Shift the memory so that the echo pointer offset is the start of the buffer
 	
@@ -834,7 +821,7 @@ static AS3_Val biquad(void *self, AS3_Val args)
 		ly1 = *(stateBuffer+2);
 		ly2 = *(stateBuffer+3);
 		while (count--) {
-			lx = *buffer; // input
+			lx = *buffer + 1e-15 - 1e-15; // input with denormals zapped
             ly = lx*b0 + lx1*b1 + lx2*b2 - ly1*a1 - ly2*a2;
 			lx2 = lx1;
 			lx1 = lx;
@@ -856,14 +843,14 @@ static AS3_Val biquad(void *self, AS3_Val args)
 		ly2 = *(stateBuffer+6);
 		ry2 = *(stateBuffer+7);
 		while (count--) {
-			lx = *buffer; // left input
+			lx = *buffer + 1e-15 - 1e-15; // left input
             ly = lx*b0 + lx1*b1 + lx2*b2 - ly1*a1 - ly2*a2;
 			lx2 = lx1;
 			lx1 = lx;
 			ly2 = ly1;
 			ly1 = ly;
             *buffer++ = ly; // left output
-			rx = *buffer; // right input
+			rx = *buffer + 1e-15 - 1e-15; // right input
             ry = rx*b0 + rx1*b1 + rx2*b2 - ry1*a1 - ry2*a2;
 			rx2 = rx1;
 			rx1 = rx;
@@ -884,6 +871,25 @@ static AS3_Val biquad(void *self, AS3_Val args)
 	return 0;
 }
 
+/**
+ * Writes a sample out to an as3 byte array.
+ * Used for final output to a sample handler.
+ */
+
+static AS3_Val writeBytes(void *self, AS3_Val args) 
+{
+	int bufferPosition; int channels; int frames;
+	float *buffer;
+	AS3_Val dst;
+	int len;
+	
+	AS3_ArrayValue(args, "IntType, AS3ValType, IntType, IntType", &bufferPosition, &dst, &channels, &frames);
+	buffer = (float *) bufferPosition;
+	len = frames * channels * sizeof(float);
+	
+	AS3_ByteArray_writeBytes(dst, buffer, len);
+	return 0;
+} 
 
 
 static int fillNoteLookupTable()
@@ -902,41 +908,25 @@ static int fillNoteLookupTable()
 
 int main()
 {
-	// Create method objects
-	AS3_Val allocateSampleMemoryMethod = AS3_Function(NULL, allocateSampleMemory);
-	AS3_Val reallocateSampleMemoryMethod = AS3_Function(NULL, reallocateSampleMemory);
-	AS3_Val deallocateSampleMemoryMethod = AS3_FunctionAsync(NULL, deallocateSampleMemory); //  deallocate asynchronously seems to work better?
-	AS3_Val setSamplesMethod = AS3_Function(NULL, setSamples);
-	AS3_Val changeGainMethod = AS3_Function(NULL, changeGain);
-	AS3_Val copyMethod = AS3_Function(NULL, copy);
-	AS3_Val mixInPanMethod = AS3_Function(NULL, mixInPan);
-	AS3_Val mixInMethod = AS3_Function(NULL, mixIn);
-	AS3_Val multiplyInMethod = AS3_Function(NULL, multiplyIn);
-	AS3_Val standardizeMethod = AS3_Function(NULL, standardize);
-	AS3_Val wavetableInMethod = AS3_Function(NULL, wavetableIn);
-	AS3_Val waveModInMethod = AS3_Function(NULL, waveModIn);
-	AS3_Val delayMethod = AS3_Function(NULL, delay);
-	AS3_Val biquadMethod = AS3_Function(NULL, biquad);
-  
-	// Make a ginormous object with all the lib's methods
-	AS3_Val result = AS3_Object("allocateSampleMemory:AS3ValType, reallocateSampleMemory:AS3ValType, setSamples:AS3ValType, deallocateSampleMemory:AS3ValType, copy:AS3ValType, changeGain:AS3ValType, mixIn:AS3ValType, mixInPan:AS3ValType, multiplyIn:AS3ValType, standardize:AS3ValType, wavetableIn:AS3ValType, waveModIn:AS3ValType, delay:AS3ValType, biquad:AS3ValType", 
-		allocateSampleMemoryMethod, reallocateSampleMemoryMethod, setSamplesMethod, deallocateSampleMemoryMethod, copyMethod, changeGainMethod, mixInMethod, mixInPanMethod, multiplyInMethod, standardizeMethod, wavetableInMethod, waveModInMethod, delayMethod, biquadMethod);
-	 
-	// Free memory
-	AS3_Release(allocateSampleMemoryMethod);
-	AS3_Release(reallocateSampleMemoryMethod);
-	AS3_Release(deallocateSampleMemoryMethod);
-	AS3_Release(setSamplesMethod);
-	AS3_Release(copyMethod);
-	AS3_Release(changeGainMethod);
-	AS3_Release(mixInMethod);
-	AS3_Release(mixInPanMethod);
-	AS3_Release(multiplyInMethod);
-	AS3_Release(standardizeMethod);
-	AS3_Release(wavetableInMethod);
-	AS3_Release(waveModInMethod);
-	AS3_Release(delayMethod);
-	AS3_Release(biquadMethod);
+	// This method does not free all these strings and AS3 vals, but what-ev!
+	// This app uses so much freaking memory anyway :p
+	
+	AS3_Val result = AS3_Object("");
+	AS3_SetS(result, "allocateSampleMemory",  AS3_Function(NULL, allocateSampleMemory) );
+	AS3_SetS(result, "reallocateSampleMemory",  AS3_Function(NULL, reallocateSampleMemory) );
+	AS3_SetS(result, "deallocateSampleMemory",  AS3_Function(NULL, deallocateSampleMemory) );
+	AS3_SetS(result, "setSamples",  AS3_Function(NULL, setSamples) );
+	AS3_SetS(result, "copy",  AS3_Function(NULL, copy) );
+	AS3_SetS(result, "changeGain",  AS3_Function(NULL, changeGain) );
+	AS3_SetS(result, "mixIn",  AS3_Function(NULL, mixIn) );
+	AS3_SetS(result, "mixInPan",  AS3_Function(NULL, mixInPan) );
+	AS3_SetS(result, "multiplyIn",  AS3_Function(NULL, multiplyIn) );
+	AS3_SetS(result, "standardize",  AS3_Function(NULL, standardize) );
+	AS3_SetS(result, "wavetableIn",  AS3_Function(NULL, wavetableIn) );
+	AS3_SetS(result, "waveModIn",  AS3_Function(NULL, waveModIn) );
+	AS3_SetS(result, "delay",  AS3_Function(NULL, delay) );
+	AS3_SetS(result, "biquad",  AS3_Function(NULL, biquad) );
+	AS3_SetS(result, "writeBytes", AS3_Function(NULL, writeBytes) );
 	
 	// make our note number to frequency lookup table
 	fillNoteLookupTable();

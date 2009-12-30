@@ -151,7 +151,7 @@ package com.noteflight.standingwave3.output
 				sample = source.getSample(length);  
 				
 				// Read the sample data to the ByteArray provided by the handler, and then clean up
-				sample.readBytes(e.data, 0, length);
+				sample.writeBytes(e.data, 0, length);    
 				sample.destroy();
    			} 
              

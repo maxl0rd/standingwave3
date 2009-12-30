@@ -16,8 +16,11 @@
 
 package com.noteflight.standingwave3.generators
 {
-	import com.noteflight.standingwave3.elements.*;
 	import __AS3__.vec.Vector;
+	
+	import com.noteflight.standingwave3.elements.*;
+	
+	import flash.utils.getTimer;
 	
 
 	/**
@@ -120,6 +123,7 @@ package com.noteflight.standingwave3.generators
 		 */
 		protected static function generateExponentialTable(table:Sample, minimum:Number, maximum:Number):void
 		{
+			var t:int = getTimer();
 			// Create a vector for the table
 			var tableSize:int = table.frameCount;
 			var maxDivMin:Number = maximum / minimum;
@@ -134,6 +138,8 @@ package com.noteflight.standingwave3.generators
 			for (var c:int=0; c<table.descriptor.channels; c++) {
 				table.commitSlice(data, c, 0);
 			}
+			
+			// trace("Exp table: " + (getTimer() - t) )
 		}
 		
 		/**
@@ -145,7 +151,8 @@ package com.noteflight.standingwave3.generators
 			var tableSize:int = table.frameCount;
 			var data:Vector.<Number> = new Vector.<Number>(tableSize, true);
 			data[0] = minimum;
-			for (var i:int=1; i<tableSize-1; i++) {
+			var i:int = tableSize-1;
+			while (--i != 0) {
 				// create a curve from the minimum to maximum
 				data[i] = minimum + maximum * ( i/(tableSize-2) );
 			}
