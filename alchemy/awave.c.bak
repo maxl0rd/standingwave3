@@ -28,25 +28,10 @@ char trace[100];
 // 64 steps for each of the 128 midi note numbers, large enough to not interpolate
 float noteToFreqLookup[8192]; 
 
-// Another *large* lookup table for db to amplitude factor conversion
-// Goes from -128 to +128 db, which is kind of ridiculous, but
-//  provides 32 steps per db which probably enables us to do without interpolation
-float dbToPowerLookup[8192];
-
-// Scratch buffers for random stuff
-float scratch1[16384];
-float scratch2[16384];
-float scratch3[16384];
-float scratch4[16384];
-
 static inline float interpolate(float sample1, float sample2, float fraction) {
 	return sample1 + fraction * (sample2-sample1);
 }
 
-// We use splines for modulation shapes, typically ~ 1 point per 1024k buffer
-// These are temporarily expanded into scratch memory and run continuous modulations
-
-/* Cubic spline interpolation */
 static inline float cubicInterpolate( float y0, float y1, float y2, float y3, float mu) {
    float a0,a1,a2,a3,mu2;
    mu2 = mu*mu;
@@ -57,52 +42,9 @@ static inline float cubicInterpolate( float y0, float y1, float y2, float y3, fl
    return(a0*mu*mu2+a1*mu2+a2*mu+a3);
 }
  
-/* Expand a spline segment into a buffer */
-static int expandSpline(AS3_Val *modPoint, float *buffer, int frames) 
-{
-	double y0Arg, y1Arg, y2Arg, y3Arg;
-	float y0, y1, y2, y3;
-	float p, incr;
-	int count;
-	AS3_ObjectValue(*modPoint, "y0:DoubleType, y1:DoubleType, y2:DoubleType, y3:DoubleType", &y0Arg, &y1Arg, &y2Arg, &y3Arg);
-	y0 = (float) y0Arg;
-	y1 = (float) y1Arg;
-	y2 = (float) y2Arg;
-	y3 = (float) y3Arg;
-	incr = 1 / (float) frames;
-	count = frames;
-	p = 0;
-	// Optimize continuous, linear, and cubic modes
-	if (y0 == y1 && y1 == y2 && y2 == y3) {
-		// All values are the same
-		while (count--) {
-			*buffer++ = y1;
-		}
-	} else if (y0 == y1 && y2 == y3) {
-		// Linear interpolation
-		while (count--) {
-			*buffer++ = interpolate(y1, y2, p);
-			p += incr;
-		}
-	} else {
-		// This is a full spline segment
-		// Loop over the whole segment and calc instantaneous spline values with cubic interpolation
-		while (count--) {
-			*buffer++ = cubicInterpolate(y0, y1, y2, y3, p);
-			p += incr;
-		}
-	}
-	return 0;
-}
-
 /* Returns a frequency in Hz for a midi note number */
 static inline float noteToFreq(float note) {
 	return noteToFreqLookup[ (int)(note*64) ];
-}
-
-/* Returns an amplitude factor for a decibel gain number (from -128db to +128 db) */
-static inline float dbToPower(float dbGain) {
-	return dbToPowerLookup[ (int)(dbGain*32) + 4096 ];
 }
 
 /* Returns a frequency shift factor from a semitone shift number -- ie. +12 semitones = 2x frequency */
@@ -276,7 +218,7 @@ static AS3_Val standardize(void *self, AS3_Val args)
 	} else if (rate == 44100 && channels == 1) {
 		// Stereoize
 		count = frames;
-		while (--count) {
+		while (count--) {
 			*buffer++ = *sourceBuffer;
 			*buffer++ = *sourceBuffer++;
 		}
@@ -718,14 +660,28 @@ static AS3_Val wavetableIn(void *self, AS3_Val args)
 	phaseAdd = (float) phaseAddArg * tableSize; // num source frames to add per output frames
 	phase = (float) phaseArg * tableSize; // translate into a frame count into the table
 	phaseReset = (float) phaseResetArg * tableSize;
-		
+	
+	phaseReset += 1; // hack
+	tableSize -= 1; // hack
+	
 	// Make sure we got everything right
 	// sprintf(trace, "Wavetable size=%d phase=%f phaseAdd=%f", tableSize, phase, phaseAdd);
 	// sztrace(trace);	
 				
 	// phase goes from 0 to tableSize
-	count=frames;
 	if (channels == 1) {
+		// First sample
+		while (phase >= tableSize) {
+			phase -= tableSize; // wrap phase to the loop point
+			phase += phaseReset;
+		}
+		intPhase = (int) phase; // int phase
+		wavetablePosition = sourceBuffer + intPhase;
+		*buffer = cubicInterpolate(*wavetablePosition, *wavetablePosition, *(wavetablePosition+1), *(wavetablePosition+2), phase - intPhase);
+		buffer++;
+		phase += phaseAdd;
+		// Loop
+		count=frames-1;
 		while (count--) {
 			while (phase >= tableSize) {
 				phase -= tableSize; // wrap phase to the loop point
@@ -733,7 +689,9 @@ static AS3_Val wavetableIn(void *self, AS3_Val args)
 			}
 			intPhase = (int) phase; // int phase
 			wavetablePosition = sourceBuffer + intPhase;
-			*buffer++ = interpolate(*wavetablePosition, *(wavetablePosition+1), phase - intPhase);
+			*buffer = cubicInterpolate(*(wavetablePosition-1), *wavetablePosition, *(wavetablePosition+1), *(wavetablePosition+2), phase - intPhase);
+			// *buffer++ = interpolate(*wavetablePosition, *(wavetablePosition+1), phase - intPhase);
+			buffer++;
 			phase += phaseAdd; 
 		}
 	} else if (channels == 2 ) {
@@ -975,46 +933,6 @@ static AS3_Val biquad(void *self, AS3_Val args)
 }
 
 /**
- * Envelope this sample with a modPoint in dbGain.
- */
-static AS3_Val envelope(void *self, AS3_Val args)
-{
-	int bufferPosition, channels, frames;
-	float *buffer; 
-	float *scratch;
-	AS3_Val modPoint;
-	int count; 
-	
-	AS3_ArrayValue(args, "IntType, IntType, IntType, AS3ValType", &bufferPosition, &channels, &frames, &modPoint);
-	buffer = (float *) bufferPosition;
-	expandSpline(&modPoint, scratch1, frames); // draws spline segment into scratch1
-	scratch = (float *) scratch1;
-
-	count = frames*channels;
-	if (count % 8 == 0) 
-	{
-		count /= 8;
-		while (count--)
-		{
-			*buffer++ *= dbToPower(*scratch++);
-			*buffer++ *= dbToPower(*scratch++);
-			*buffer++ *= dbToPower(*scratch++);
-			*buffer++ *= dbToPower(*scratch++);
-			*buffer++ *= dbToPower(*scratch++);
-			*buffer++ *= dbToPower(*scratch++);
-			*buffer++ *= dbToPower(*scratch++);
-			*buffer++ *= dbToPower(*scratch++);
-		}
-	} else {
-		while (count--) 
-		{
-			*buffer++ *= dbToPower(*scratch++);
-		}
-	}
-	return 0;
-}
-
-/**
  * Writes a sample out to an as3 byte array.
  * Used for final output to a sample handler.
  */
@@ -1048,18 +966,6 @@ static int fillNoteLookupTable()
 	return 0;
 }
 
-static int fillPowerLookupTable()
-{
-	int b;
-	float ln10div20 = 2.3025850929940459011 / 20;
-	float db = -128.0;
-	for (b=0; b<8192; b++) {
-		// From -128db to +128db in 1/32 db steps
-		dbToPowerLookup[b] = exp(db * ln10div20);
-		db += .03125; // 1/32
-	}
-	return 0;
-}
 
 int main()
 {
@@ -1082,12 +988,9 @@ int main()
 	AS3_SetS(result, "delay",  AS3_Function(NULL, delay) );
 	AS3_SetS(result, "biquad",  AS3_Function(NULL, biquad) );
 	AS3_SetS(result, "writeBytes", AS3_Function(NULL, writeBytes) );
-	AS3_SetS(result, "envelope", AS3_Function(NULL, envelope) );
 	
 	// make our note number to frequency lookup table
 	fillNoteLookupTable();
-	fillPowerLookupTable();
-	
 	
 	// notify that we initialized -- THIS DOES NOT RETURN!
 	AS3_LibInit(result);
