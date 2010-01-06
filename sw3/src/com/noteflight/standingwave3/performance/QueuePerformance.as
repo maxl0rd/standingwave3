@@ -83,6 +83,11 @@ package com.noteflight.standingwave3.performance
             return _sources[0].descriptor;
         }
 
+		public function get stereoize():Boolean 
+		{
+			return false;
+		}
+
         public function clone():IPerformance
         {
             var qp:QueuePerformance = new QueuePerformance();

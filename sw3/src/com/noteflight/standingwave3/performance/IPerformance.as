@@ -45,6 +45,11 @@ package com.noteflight.standingwave3.performance
         function get frameCount():Number;
         
         /**
+         * A boolean that determines whether audio performer creates a stereo mix from mono sources.
+         */ 
+        function get stereoize():Boolean
+        
+        /**
          * Obtain a clone of this performance, preserving all of its timing information but
          * cloning all contained audio sources. 
          */

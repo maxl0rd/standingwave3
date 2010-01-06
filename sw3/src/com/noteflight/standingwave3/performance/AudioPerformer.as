@@ -113,9 +113,7 @@ package com.noteflight.standingwave3.performance
             // create our result sample and zero its samples out so we can add in the
             // audio from performance events that intersect our time interval.
             var sample:Sample = new Sample(descriptor, numFrames);
-            
-            var fgain:Number = AudioUtils.decibelsToFactor(mixGain);
-            
+                        
             // Maintain a list of all PerformanceElements known to be active at the current
             // audio cursor position.
             var _stillActive:Vector.<PerformanceElement> = new Vector.<PerformanceElement>();
@@ -150,18 +148,8 @@ package com.noteflight.standingwave3.performance
                 // If anything to do, then add the element's signal into our result.
                 if (activeLength > 0)
                 {
-                	// Optimize the mixing of IDirectAccessSources vs IAudioSources
-                	if (element.source is IDirectAccessSource) {
-                		var p:Number = element.source.position;
-                		// Mix it in, without using an intermediate sample
-                		IDirectAccessSource(element.source).useSample(activeLength); // element.source.position advances and caches if needed
-                		sample.mixInDirectAccessSource(IDirectAccessSource(element.source), p, fgain, activeOffset, activeLength);
-                	} else {
-                		// Do a regular getSample, mix, and destroy
-                    	var elementSample:Sample = element.source.getSample(activeLength);
-                    	sample.mixIn(elementSample, fgain, activeOffset);
-                    	elementSample.destroy();
-                    }
+      				// Mix the element into the output mix bus
+                	mix(sample, element, activeOffset, activeLength, _performance.stereoize);	
                 }
                 
                 // If this element is still going to be active in the next batch of frames, take note of that.
@@ -177,6 +165,69 @@ package com.noteflight.standingwave3.performance
             return sample;
         }
         
+        /** Mix buss. Can mix stereo samples, mono samples, or pan out mono sources to a stereo buss.
+        */
+        private function mix(sample:Sample, element:PerformanceElement, activeOffset:Number, activeLength:Number, stereoize:Boolean=false):void
+        {
+        	// Calculate gain which is the element's mix gain plus the total mix bus gain
+        	var fgain:Number = AudioUtils.decibelsToFactor( mixGain + element.gain );
+        	var p:Number;
+        	var elementSample:Sample;
+        	
+        	if (stereoize) {
+         		// Do a stereo panning mix of mono elements. 
+         		// Look at the pan position of each element and call mixInPan instead
+         		var gains:Object = AudioUtils.panToFactors(element.pan);
+         		gains.right *= fgain;
+         		gains.left *= fgain;
+            	if (testIDirect(element, activeLength)) {
+            		p = element.source.position;
+            		IDirectAccessSource(element.source).useSample(activeLength);
+            		sample.mixInPanDirectAccessSource(IDirectAccessSource(element.source), p, gains.left, gains.right, activeOffset, activeLength);
+            	} else {
+                	elementSample = element.source.getSample(activeLength);
+                	sample.mixInPan(elementSample, gains.left, gains.right, activeOffset);
+                	elementSample.destroy();
+                }	
+         	} else {
+    			// Optimize the mixing of IDirectAccessSources vs IAudioSources
+            	if (testIDirect(element, activeLength)) {
+            		IDirectAccessSource(element.source).useSample(activeLength);
+            		p = element.source.position;
+            		// Mix it in, without using an intermediate sample
+            		sample.mixInDirectAccessSource(IDirectAccessSource(element.source), p, fgain, activeOffset, activeLength);
+            	} else {
+            		// Do a regular getSample, mix, and destroy
+                	elementSample = element.source.getSample(activeLength);
+                	sample.mixIn(elementSample, fgain, activeOffset);
+                	elementSample.destroy();
+                }	
+         	}
+        }
+        
+        /** 
+         * Determine whether an element's source is usable as an IDirectSource for this range 
+         */
+        private function testIDirect(element:PerformanceElement, numFrames:Number):Boolean 
+        {
+        	var source:IDirectAccessSource;
+        	if (element.source is IDirectAccessSource) {
+        		// Fill the source to this point, and then check that the pointer is valid
+        		source = IDirectAccessSource(element.source);
+				source.fill(element.source.position + numFrames);
+        		if ( source.getSamplePointer(element.source.position + numFrames - 1) ) {
+        			// We can get a pointer to the complete range of the sample we need
+        			return true;
+        		} else {
+        			// This range is not valid for direct access for some reason
+        			// Treat it as an IAudioSource
+        			return false;
+        		}
+        	} else {
+        		// Not an IDirectAudioSource
+        		return false;
+        	}
+        }
         
         public function clone():IAudioSource
         {

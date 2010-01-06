@@ -17,7 +17,6 @@
 package com.noteflight.standingwave3.performance
 {
     import __AS3__.vec.Vector;
-    import com.noteflight.standingwave3.performance.PerformanceElement;
     
     import com.noteflight.standingwave3.elements.*;
     
@@ -28,6 +27,9 @@ package com.noteflight.standingwave3.performance
     public class ListPerformance implements IPerformance
     {
         private var _defaultDescriptor:AudioDescriptor = new AudioDescriptor();
+        private var _stereoDescriptor:AudioDescriptor;
+        
+        public var _stereoize:Boolean;
         
         private var _elements:Vector.<PerformanceElement> = new Vector.<PerformanceElement>;
         
@@ -36,6 +38,10 @@ package com.noteflight.standingwave3.performance
         private var _frameCount:Number = 0;  
         
         private var _lastIndex:Number = 0;
+        
+        public function ListPerformance(stereoize:Boolean=false) {
+        	this.stereoize = false;
+        }
         
         /**
          * Add a Performance Element to this Performance. 
@@ -63,9 +69,9 @@ package com.noteflight.standingwave3.performance
         /**
          * Add an IAudioSource to this performance, to start at a particular start time.
          */
-        public function addSourceAt(startTime:Number, source:IAudioSource):void
+        public function addSourceAt(startTime:Number, source:IAudioSource, gain:Number=0, pan:Number=0):void
         {
-            addElement(new PerformanceElement(startTime, source));
+            addElement(new PerformanceElement(startTime, source, gain, pan));
         }
         
         /**
@@ -132,16 +138,28 @@ package com.noteflight.standingwave3.performance
             return result;
         }
         
+        public function set stereoize(s:Boolean):void
+        {
+        	_stereoize = s;
+        }
+        
+        public function get stereoize():Boolean {
+        	return _stereoize;
+        }
+        
         public function get descriptor():AudioDescriptor
         {
-            if (elements.length > 0)
-            {
-                return elements[0].source.descriptor;
+        	var rslt:AudioDescriptor;
+        	if (elements.length > 0) {
+                rslt =  elements[0].source.descriptor;
+         	} else {
+                rslt = _defaultDescriptor;
             }
-            else
-            {
-                return _defaultDescriptor;
-            }
+            if (_stereoize) {
+            	_stereoDescriptor = new AudioDescriptor(rslt.rate, 2);
+        		rslt = _stereoDescriptor;
+        	}
+        	return rslt; 
         }
 
         public function clone():IPerformance

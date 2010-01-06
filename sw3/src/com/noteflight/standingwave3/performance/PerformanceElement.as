@@ -26,16 +26,25 @@ package com.noteflight.standingwave3.performance
         private var _source:IAudioSource;
         private var _start:Number;
         
+        /** Optional mix gain (in db) for this element. Defaults to 0, unity gain. */
+        public var gain:Number;
+        
+        /** Optimal pan position (-1 to 1) for this element. Defaults to 0, center panned. */
+        public var pan:Number; 
+        
         /**
          * Create a PerformanceElement that renders the given source at a particular time onset. 
          * @param start a time onset within the performance in seconds from the time origin
          * @param source an instance of IAudioSource
-         * 
+         * @param gain an optional mix gain adjustment for this source
+         * @param pan an optional pan adjustment for this source
          */
-        public function PerformanceElement(startTime:Number, source:IAudioSource)
+        public function PerformanceElement(startTime:Number, source:IAudioSource, gain:Number=0, pan:Number=0)
         {
             _start = Math.floor(startTime * source.descriptor.rate);
             _source = source;
+            this.gain = gain;
+            this.pan = pan;
         }
                
         /**
