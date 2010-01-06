@@ -26,7 +26,7 @@ package com.noteflight.standingwave3.filters
     {
     	// Overrides the source descriptor
     	private var _descriptor:AudioDescriptor;
-        
+         
         public function StandardizeFilter(source:IAudioSource)
         {
             super(source);

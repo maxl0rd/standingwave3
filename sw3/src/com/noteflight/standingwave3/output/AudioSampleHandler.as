@@ -53,6 +53,9 @@ package com.noteflight.standingwave3.output
         private var _totalLatency:Number = 0;
         private var _latencyCount:Number = 0;
         private var LATENCY_MAX_COUNT:Number = 10;
+        
+        /** A suck factor to keep track of how far off we are. */
+        private var _deadFrames:Number = 0;
 
         // The SoundChannel that the output is playing through, really only needed for calculating latency
         private var _channel:SoundChannel;
@@ -106,7 +109,10 @@ package com.noteflight.standingwave3.output
         {
             if (_channel != null && _source != null && _sourceStarted)
             {
-                return (_channel.position / 1000.0) - (_startFrame / 44100);
+                var rslt:Number = (_channel.position / 1000.0); // start with where the channel event is
+                rslt -= _startFrame / 44100; // go back, if we started late for some reason
+                rslt -= _deadFrames / 44100; // subtract all the dead frames that we didn't deliver
+                return rslt;
             }
             return 0;
         }
@@ -141,6 +147,16 @@ package com.noteflight.standingwave3.output
             // Determine the frame at which we should start getting samples from the source.
             var frame:Number;
             frame = e.position - _startFrame;
+            
+            // See if we totally blew it 
+            if (frame > _source.position) {
+            	// We've been dropping frames. Keep track of how far off we are.
+            	_deadFrames = e.position - _source.position;
+            	// trace("Dead frames at " + frame + " = " + _deadFrames);
+            } else {
+            	// trace("Healthy handler at " + frame);
+            }
+            
 			length = source.frameCount - frame;
 			if (length > framesPerCallback) {
 				length = framesPerCallback;
@@ -150,6 +166,15 @@ package com.noteflight.standingwave3.output
 			{	
 				// Get our output Sample.
 				sample = source.getSample(length);  
+				
+				/* For testing load hell, you can add a horrible random delay here
+				Obviously, do not turn this on unless you want to suck.
+				if (Math.random() > 0.8) {
+					for (var d:int=0; d < 500000; d++) {
+						var stupid = Math.atan( Math.random() );
+					}
+				}
+				*/
 				
 				// Read the sample data to the ByteArray provided by the handler, and then clean up
 				sample.writeBytes(e.data, 0, length);    
@@ -182,7 +207,7 @@ package com.noteflight.standingwave3.output
         {
             if (_lastSampleTime > 0)
             {
-            	// I find the CPU measure to be erratic beyond useful,
+            	// The CPU measure can be erratic beyond useful,
             	//   so we'll publish a moving average of the last 5 cpu calculations
             	// var instantaneousCpu:Number = 100 * (getTimer() - now) / (now - _lastSampleTime);
                 // cpuPercentage = Math.floor(cpuPercentage*0.8 + instantaneousCpu*0.2);
