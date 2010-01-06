@@ -71,16 +71,11 @@ package com.noteflight.standingwave3.filters
 		
 		private function calculateGains():void 
 		{	
-			var plf:Number = AudioUtils.decibelsToFactor(_panLaw);
-			if (_pan < -1) { pan = -1; }
-			if (_pan > 1) { pan = 1; }
-			if (_pan > 0) {
-				_leftGain = plf * (1 - _pan);
-				_rightGain = plf * (1-_pan) + _pan;
-			} else {
-				_leftGain = plf * (1 + _pan) - _pan;
-				_rightGain = plf * (1+_pan);
-			}
+			// Change pan position -1 to 1 into left and right amplitude factors
+			var gains:Object = AudioUtils.panToFactors(_pan, _panLaw);
+			_leftGain = gains.left;
+			_rightGain = gains.right;
+			
 			// Static gain adjustment
 			_leftGain *= AudioUtils.decibelsToFactor(_gain);
 			_rightGain *= AudioUtils.decibelsToFactor(_gain);

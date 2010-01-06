@@ -407,12 +407,12 @@ package com.noteflight.standingwave3.elements
         /**
          * Set a range of frames to a fixed sample value 
          * @param value the numerical value to set all samples to
-         * @param targetOffset the offset into the sample to start modifying      
+         * @param targetOffset the offset into the sample to start modifying       
          * @param numFrames the number of continuous frames to set  
          */
-        public function setSamples(value:Number, targetOffset:Number, numFrames:Number):void
+        public function setSamples(value:Number, targetOffset:Number, numFrames:Number):void 
         {
-            Sample._awave.setSamples(getSamplePointer(targetOffset), _descriptor.channels, numFrames, value);
+            Sample._awave.setSamples(getSamplePointer(targetOffset), _descriptor.channels, numFrames, value);   
             invalidateChannelData();
         }   
         
@@ -485,18 +485,30 @@ package com.noteflight.standingwave3.elements
         	
         	if (_awaveMemoryDirty) {
         		commitChannelData(); // make sure we're in sync
-        	}
+        	}  
         	if (numFrames < 0) {
         		numFrames = _frames; // if unspecified, mix into the entire sample
-        	}
+        	}  
 			thisSamplePointer = getSamplePointer(targetOffset); // mix in at this position
 			mixSamplePointer = source.getSamplePointer(sourceOffset); // mix from this position
 			numFrames = Math.min(numFrames, _frames - targetOffset); // don't mix more frames than are left in our target 
 			numFrames = Math.min(numFrames, source.frameCount - sourceOffset); // and don't mix more than are left in our source
 			Sample._awave.mixInPan(thisSamplePointer, mixSamplePointer, Math.floor(numFrames), leftGain, rightGain);  
 			invalidateChannelData();
-       }
+       } 
        
+       public function envelope(mp:Mod, numFrames:Number=-1):void 
+       {
+       		if (_awaveMemoryDirty) {
+        		commitChannelData(); // make sure we're in sync
+        	}  
+        	if (numFrames < 0) {
+        		numFrames = _frames; // if unspecified, mix into the entire sample
+        	} 
+       		Sample._awave.envelope(getSamplePointer(), _descriptor.channels, numFrames, mp); 
+       		invalidateChannelData();
+       } 
+        
        /**
         * The multiply functions are very similar to the mix functions.
         * They apply the amplitude envelope of the source on to the target.
@@ -505,7 +517,7 @@ package com.noteflight.standingwave3.elements
         * @param sourceSample the source sample to multiply in
         * @param gain an extra multiplication factor to apply to the source
         * @param offset the number of frames into this target sample to begin multiplying at
-        */ 
+        */  
         public function multiplyIn(sourceSample:Sample, gain:Number=1.0, offset:Number=0):void 
         {
 			multiplyInDirectAccessSource(IDirectAccessSource(sourceSample), 0, gain, offset, _frames);  
@@ -792,20 +804,10 @@ package com.noteflight.standingwave3.elements
         	if (numFrames < 0) {
         		numFrames = _frames; // if unspecified, write the whole sample
         	}
-        	
-        	// There should be a way to do this with a single writeBytes() call maybe...?  
-        	/*      	
-        	outputBytes.position = 0;
-        	_awaveMemory.position = getSamplePointer(offset);
-        	for (var s:int=0; s < numFrames; s++) {
-        		outputBytes.writeFloat( _awaveMemory.readFloat() ); // left
-        		outputBytes.writeFloat( _awaveMemory.readFloat() ); // right
-        	}
-        	*/
-        	var aw:ByteArray = Sample._awaveMemory;
+        	// Awave memory is littleEndian, and the sampleEvent handler is bigEndian
+        	// If we just adjust its littleEndianess, then we can use the Clib func to bang all the bytes in fast
         	destBytes.endian = "littleEndian";
         	Sample._awave.writeBytes(getSamplePointer(offset), destBytes, _descriptor.channels, _frames);
-        	 
         } 
         
         public function copy(source:Sample, type:int):void
@@ -894,7 +896,7 @@ package com.noteflight.standingwave3.elements
 					return pool[len].pop();
 				}
 			}
-			// Either it's not a size we're pooling, or we ran out
+			// Either it's larger than a size we're pooling, or we ran out
 			return 0;
 		}
 		

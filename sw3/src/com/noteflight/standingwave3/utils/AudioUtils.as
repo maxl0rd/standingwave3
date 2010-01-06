@@ -53,6 +53,28 @@ package com.noteflight.standingwave3.utils
         }
         
         /**
+        * Convert a pan position into left and right amplitude factors.
+        * @param pan the pan position from left -1 to center 0 to right -1
+        * @param panLaw the db down at center, defaults to -3db
+        * @returns an object with left and right values set to amp factors
+        */
+        public static function panToFactors(pan:Number, panLaw:Number=-3):Object 
+        {
+        	var rslt:Object = new Object();
+        	var plf:Number = AudioUtils.decibelsToFactor(panLaw);
+			if (pan < -1) { pan = -1; }
+			if (pan > 1) { pan = 1; }
+			if (pan > 0) {
+				rslt.left = plf * (1 - pan);
+				rslt.right = plf * (1-pan) + pan;
+			} else {
+				rslt.left = plf * (1 + pan) - pan;
+				rslt.right = plf * (1+pan);
+			}
+			return rslt;
+        }
+        
+        /**
          * Compute a normalized concave unipolar control signal going from +1 to 0
          * as the input goes from 0 to +1; 
          */

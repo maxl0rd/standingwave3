@@ -84,7 +84,7 @@ package com.noteflight.standingwave3.generators
         }
         
         /**
-         * Fill the next run of audio if necessary, but do not return it 
+         * Fill the next run of audio if necessary, but do not return it   
          * Advance our playback
          */
         public function useSample(numFrames:Number):void

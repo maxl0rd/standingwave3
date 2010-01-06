@@ -135,6 +135,7 @@ package com.noteflight.standingwave3.output
             {
                 _startFrame = e.position;
                 _sourceStarted = true;
+                cpuPercentage = 0;
             }
             
             // Determine the frame at which we should start getting samples from the source.
@@ -183,9 +184,10 @@ package com.noteflight.standingwave3.output
             {
             	// I find the CPU measure to be erratic beyond useful,
             	//   so we'll publish a moving average of the last 5 cpu calculations
-            	var instantaneousCpu:Number = 100 * (getTimer() - now) / (now - _lastSampleTime);
-                cpuPercentage = Math.floor(cpuPercentage*0.8 + instantaneousCpu*0.2);
+            	// var instantaneousCpu:Number = 100 * (getTimer() - now) / (now - _lastSampleTime);
+                // cpuPercentage = Math.floor(cpuPercentage*0.8 + instantaneousCpu*0.2);
                 // trace("cpu:", cpuPercentage, "latency:", latency, "interval:", now - _lastSampleTime);
+                cpuPercentage = Math.floor(100 * (getTimer() - now) / (now - _lastSampleTime));
             }
             _lastSampleTime = now;
         }

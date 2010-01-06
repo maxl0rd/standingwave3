@@ -17,67 +17,91 @@
 package com.noteflight.standingwave3.filters
 {
     import com.noteflight.standingwave3.elements.*;
+    import com.noteflight.standingwave3.filters.AbstractFilter;
     
     /**
-     * FadeInFilter first passes the source through an attack envelope
-     * and then passes it unchanged after the fade.
+     * FadeInFilter passes the signal unchanged after fading it in.
+     * Many times a fade can be used in place of an Envelope + AmpFilter
+     * and will be much more efficient, since it only calculates during the fading part.
      */
     public class FadeInFilter extends AbstractFilter
     {
     
-        /** Our envelope generator. The fade in time is the length of this envelope. */
-        private var _envelope:IDirectAccessSource;
-        
-        /** Fade time in seconds */
- 		private var _fadeDuration:Number = 0.1;
+        public static const MIN_SIGNAL:Number = -60; //db
+ 		
+ 		/** Fade time in frames */
+ 		private var _fadeDuration:Number;
  		
         /**
          * Create a new FadeInFilter. 
          * @param source the underlying audio source
-         * @param envelope the envelope generator
+         * @param fadeDuration the time in seconds for the fade to last
          */
-        public function FadeInFilter(source:IAudioSource, envelope:IDirectAccessSource)
+        public function FadeInFilter(source:IAudioSource, fadeDuration:Number = .01)
         {
             super(source);
-            this._envelope = envelope;
-            this._fadeDuration = envelope.frameCount;
-            if (!AudioDescriptor.compare(source.descriptor, envelope.descriptor)) {
-            	throw new Error ("Incompatible source and envelope descriptors.");
-            }
+            this.fadeDuration = fadeDuration;
         }
+  
+        /**
+        * Set fade time in seconds
+        */
+        public function set fadeDuration(t:Number):void 
+        {
+        	_fadeDuration = t * _source.descriptor.rate;
+        }     
         
+        /**
+        * Get Fade time in seconds
+        */
         public function get fadeDuration():Number
         {
         	return _fadeDuration / _source.descriptor.rate;
         }
+		     
+        override public function get frameCount():Number
+		{
+			return _source.frameCount;
+		} 
+        
+        /**
+         * Returns the decibel gain amount at any position
+         */
+        private function fadeGainAtPosition(p:Number):Number {
+        	if (p > _fadeDuration) {
+        		return 0;
+        	}
+        	return MIN_SIGNAL * (1 - (p/_fadeDuration));
+        }
         
         override public function getSample(numFrames:Number):Sample
         {
-        	var startPosition:Number = _source.position;
-        	var framesToMake:Number = 0;
-            
+        	var startPosition:Number = _source.position;    
+        	var previousStartPosition:Number = startPosition - numFrames;
             var sample:Sample = _source.getSample(numFrames);
+            var endPosition:Number = _source.position;
+            var nextEndPosition:Number = endPosition + numFrames;
+            var mp:Mod = new Mod(); // our modulation point for the spline segment
             
             if (startPosition < _fadeDuration) {
-            	// we need to fade
-            	framesToMake = _fadeDuration - startPosition;
-            	framesToMake = Math.min(numFrames, framesToMake); // clamp to numFrames
-            	_envelope.fill(_source.position); 
-            	sample.multiplyInDirectAccessSource(_envelope, startPosition, 1.0, 0.0, framesToMake);
+            	// Calculate the four spline points
+				mp.y0 = fadeGainAtPosition(previousStartPosition);
+            	mp.y1 = fadeGainAtPosition(startPosition);
+            	mp.y2 = fadeGainAtPosition(endPosition);
+            	mp.y3 = fadeGainAtPosition(nextEndPosition);
+            	
+            	// Run the fade
+            	sample.envelope(mp, numFrames);
             }
             
-            // And if not, any sample frames are passed unchanged.
+            // And if not faded, any sample frames are passed unchanged.
             
             return sample;
         }
 
-		/**
-		 * Cloning the filter also clones the source,
-		 *   but points to the same envelope generator.
-		 */
         override public function clone():IAudioSource
         {
-            return new FadeInFilter(_source.clone(), _envelope);
+            return new FadeInFilter(_source.clone(), _fadeDuration);
         }
     }
 }

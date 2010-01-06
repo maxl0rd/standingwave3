@@ -46,7 +46,7 @@ package com.noteflight.standingwave3.filters
             if (!AudioDescriptor.compare(source.descriptor, envelope.descriptor)) {
             	throw new Error ("Incompatible source and envelope descriptors.");
             }
-        }
+        }  
         
         override public function get frameCount():Number {
         	// Return the shorter of the source or the envelope
