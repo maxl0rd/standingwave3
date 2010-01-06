@@ -24,31 +24,50 @@ package com.noteflight.Rompler
 	import com.noteflight.standingwave3.generators.ADSREnvelopeGenerator;
 	import com.noteflight.standingwave3.generators.SoundGenerator;
 	import com.noteflight.standingwave3.sources.AbstractSource;
+	import com.noteflight.standingwave3.utils.AudioUtils;
 
-	/** Combines all of the functionality of sampling, looping, and enveloping
-	 * to create a note from a sample source.
-	 * 
+	/** The Rompler combines all of the functionality of sampling, looping, and enveloping
+	 * to create a musical note from a sample source.
+	 * Rompler feeds a SoundGenerator into a LoopSource, into an ADSR envelope,
+	 * and into a final output pan filter. It's suitable for sending into a
+	 * stereo AudioPerformer to create a stereo mix of any sample playback system.
+	 * Unfortunately, you must provive loop points for all samples and manage your
+	 * own voice allocation, and/or sample switching logic. 
+	 * If you are playing complex sequences, consider sending each "note" into a
+	 * CacheFilter, and reusing it in your Performance, instead of recalculating it.
 	 */
 	public class RomplerSource extends AbstractSource
 	{
 		public var soundGenerator:SoundGenerator; // the original sample, usually a SoundGenerator
 		public var envelopeGenerator:ADSREnvelopeGenerator; // the amplitude shape, usually an EnvelopeGenerator
-		public var frequencyShift:Number = 1.0; // a factor
+		
 		public var loopStartFrame:Number;
 		public var loopEndFrame:Number;
-		public var pan:Number = 0;
-		
+		public var basePitch:Number;
+		public var pan:Number = 0;		
+		public var pitch:Number;
+
 		private var _loopSource:LoopSource;
 		private var _ampFilter:AmpFilter;
 		private var _panFilter:PanFilter;
 		
-		public function RomplerSource(sg:SoundGenerator, eg:ADSREnvelopeGenerator)
+		public function RomplerSource(ad:AudioDescriptor, sg:SoundGenerator, eg:ADSREnvelopeGenerator)
 		{
-			super(new AudioDescriptor(sg.descriptor.rate, 2), eg.frameCount/eg.descriptor.rate, 1.0);
+			super(ad, eg.frameCount/eg.descriptor.rate, 1.0);
 			soundGenerator = sg;
 			envelopeGenerator = eg;
 			loopStartFrame = 0;
 			loopEndFrame = sg.frameCount;
+			basePitch = 69;
+			pitch = 69;
+			setUpChain();  
+		}
+		
+		public function get frequencyShift():Number
+		{
+			var baseFreq:Number = AudioUtils.noteNumberToFrequency(basePitch);
+			var finalFreq:Number = AudioUtils.noteNumberToFrequency(pitch);
+			return finalFreq/baseFreq;
 		}
 		
 		override public function get frameCount():Number
@@ -60,33 +79,29 @@ package com.noteflight.Rompler
 		
 		private function setUpChain():void 
 		{
-			_loopSource = new LoopSource(soundGenerator, duration);
-			_loopSource.startFrame = loopStartFrame;
-			_loopSource.endFrame = loopEndFrame;
-			_loopSource.frequencyShift = frequencyShift;
+			_loopSource = new LoopSource(descriptor, soundGenerator, duration);
 			_ampFilter = new AmpFilter(_loopSource, envelopeGenerator);
-			_ampFilter.gain = amplitude;
-			_panFilter = new PanFilter(_ampFilter, 0, 0);
-			_panFilter.pan = pan;
 		}
 		
 		override public function getSample(numFrames:Number):Sample
 		{
-			if (!_loopSource) {
-				setUpChain();
-			}
+			_loopSource.frequencyShift = frequencyShift;
+			_loopSource.startFrame = loopStartFrame;
+			_loopSource.endFrame = loopEndFrame;
+			_ampFilter.gain = amplitude;
 			
-			return _panFilter.getSample(numFrames);
+			return _ampFilter.getSample(numFrames);
 		}
 		
 		override public function clone():IAudioSource 
 		{
-			var rslt:RomplerSource = new RomplerSource(soundGenerator, envelopeGenerator);
+			var rslt:RomplerSource = new RomplerSource(_descriptor, soundGenerator, envelopeGenerator);
 			rslt.loopEndFrame = loopEndFrame;
 			rslt.loopStartFrame = loopStartFrame;
-			rslt.frequencyShift = frequencyShift;
 			rslt.amplitude = amplitude;
 			rslt.pan = pan;
+			rslt.basePitch = basePitch;
+			rslt.pitch = pitch;
 			return rslt; 
 		}
 		
