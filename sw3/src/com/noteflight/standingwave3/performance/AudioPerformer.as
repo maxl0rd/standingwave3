@@ -174,34 +174,43 @@ package com.noteflight.standingwave3.performance
         	var p:Number;
         	var elementSample:Sample;
         	
-        	if (stereoize) {
+        	if (stereoize && element.source.descriptor.channels == AudioDescriptor.CHANNELS_MONO) {
          		// Do a stereo panning mix of mono elements. 
          		// Look at the pan position of each element and call mixInPan instead
-         		var gains:Object = AudioUtils.panToFactors(element.pan);
-         		gains.right *= fgain;
-         		gains.left *= fgain;
-            	if (testIDirect(element, activeLength)) {
-            		p = element.source.position;
-            		IDirectAccessSource(element.source).useSample(activeLength);
-            		sample.mixInPanDirectAccessSource(IDirectAccessSource(element.source), p, gains.left, gains.right, activeOffset, activeLength);
-            	} else {
-                	elementSample = element.source.getSample(activeLength);
-                	sample.mixInPan(elementSample, gains.left, gains.right, activeOffset);
-                	elementSample.destroy();
-                }	
+         		if (descriptor.rate == element.source.descriptor.rate) {
+	         		var gains:Object = AudioUtils.panToFactors(element.pan);
+	         		gains.right *= fgain;
+	         		gains.left *= fgain;
+	            	if (testIDirect(element, activeLength)) {
+	            		p = element.source.position;
+	            		IDirectAccessSource(element.source).useSample(activeLength);
+	            		sample.mixInPanDirectAccessSource(IDirectAccessSource(element.source), p, gains.left, gains.right, activeOffset, activeLength);
+	            	} else {
+	                	elementSample = element.source.getSample(activeLength);
+	                	sample.mixInPan(elementSample, gains.left, gains.right, activeOffset);
+	                	elementSample.destroy();
+	                }	
+	          	} else {
+	          		throw new Error("Cannot mix sources with incompatible AudioDescriptors.");
+	          	}
          	} else {
+         		// Mix congruent descriptors straight through
     			// Optimize the mixing of IDirectAccessSources vs IAudioSources
-            	if (testIDirect(element, activeLength)) {
-            		IDirectAccessSource(element.source).useSample(activeLength);
-            		p = element.source.position;
-            		// Mix it in, without using an intermediate sample
-            		sample.mixInDirectAccessSource(IDirectAccessSource(element.source), p, fgain, activeOffset, activeLength);
-            	} else {
-            		// Do a regular getSample, mix, and destroy
-                	elementSample = element.source.getSample(activeLength);
-                	sample.mixIn(elementSample, fgain, activeOffset);
-                	elementSample.destroy();
-                }	
+    			if (AudioDescriptor.compare(descriptor, element.source.descriptor)) {
+	            	if (testIDirect(element, activeLength)) {
+	            		IDirectAccessSource(element.source).useSample(activeLength);
+	            		p = element.source.position;
+	            		// Mix it in, without using an intermediate sample
+	            		sample.mixInDirectAccessSource(IDirectAccessSource(element.source), p, fgain, activeOffset, activeLength);
+	            	} else {
+	            		// Do a regular getSample, mix, and destroy
+	                	elementSample = element.source.getSample(activeLength);
+	                	sample.mixIn(elementSample, fgain, activeOffset);
+	                	elementSample.destroy();
+	                }	
+	      		} else {
+	      			throw new Error("Cannot mix sources with incompatible AudioDescriptors.");
+	      		}
          	}
         }
         

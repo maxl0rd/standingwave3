@@ -16,7 +16,6 @@
 package com.noteflight.standingwave3.sources
 {
 	import com.noteflight.standingwave3.elements.*;
-	import com.noteflight.standingwave3.sources.AbstractSource;
 
 	/** 
 	 * Creates an audio source of indefinite duration by looping another IDirectAccessSource.
@@ -78,6 +77,16 @@ package com.noteflight.standingwave3.sources
 			
 			return sample;
 			
+		}
+		
+		override public function clone():IAudioSource
+		{
+			var rslt:LoopSource = new LoopSource(_descriptor, _generator, duration);
+			rslt.startFrame = startFrame;
+			rslt.endFrame = endFrame;
+			rslt.frequencyShift = frequencyShift;
+			rslt.resetPosition();
+			return rslt;
 		}
 		
 	}

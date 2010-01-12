@@ -18,6 +18,8 @@
 <classEntry path="com.noteflight.standingwave3.filters.FadeInFilter"/>
 <classEntry path="com.noteflight.standingwave3.filters.FadeOutFilter"/>
 <classEntry path="com.noteflight.standingwave3.filters.GainFilter"/>
+<classEntry path="com.noteflight.standingwave3.filters.OnePoleFilter"/>
+<classEntry path="com.noteflight.standingwave3.filters.OverdriveFilter"/>
 <classEntry path="com.noteflight.standingwave3.filters.PanFilter"/>
 <classEntry path="com.noteflight.standingwave3.filters.ResamplingFilter"/>
 <classEntry path="com.noteflight.standingwave3.filters.StandardizeFilter"/>

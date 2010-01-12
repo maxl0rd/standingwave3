@@ -15,7 +15,7 @@
 
 /* 
  * Thanks to Robert Bristow-Johnson  <rbj@audioimagination.com>
- *   For the classic Audio Filter Cookbook that this class is based on.
+ *   For the classic Audio Filter Cookbook that the biquads in this class are based on.
  */
 
 package com.noteflight.standingwave3.utils
@@ -29,6 +29,40 @@ package com.noteflight.standingwave3.utils
 		 * to be passed to the sample's filter methods.
 		 */
 		public function FilterCalculator() { }
+		
+		/**
+		 * Single pole low pass filter
+		 */
+		
+		/*  These one poles don't work right yet...
+		public static function onePoleLowPass(freq:Number, rate:int):Object
+		{
+			var coeffs:Object = {};
+			var w:Number = 2.0 * rate;
+			freq *= 2.0 * Math.PI;
+			var norm:Number = 1.0 / (freq + w);
+			coeffs.b1 = (w - freq) * norm;
+			coeffs.a0 = coeffs.a1 = freq * norm;
+			return coeffs;
+		}
+		*/
+		
+		/**
+		 * Single pole high pass filter
+		 */
+		/* 
+		public static function onePoleHighPass(freq:Number, rate:int):Object
+		{
+			var coeffs:Object = {};
+			var w:Number = 2.0 * rate;
+			freq *= 2.0 * Math.PI;
+			var norm:Number = 1.0 / (freq + w);
+			coeffs.a0 = w * norm;
+			coeffs.a1 = -1 * coeffs.a0;
+			coeffs.b1 = (w - freq) * norm;
+			return coeffs;
+		}
+		*/
 		
 		/**
 		 * Low Pass Biquad

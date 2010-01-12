@@ -701,12 +701,31 @@ package com.noteflight.standingwave3.elements
         }
         
         /**
+         * onePole function runs a one pole high or low pass filter function on the sample.
+         * This function cannot be used for filters with continuously changing parameters.
+         * @params state an object that holds the filter state between calls
+         * @params coeffs an object containing the filter coefficients, with values for a0,a1,b1
+         * Use the FilterCalculator class to obtain these.
+         */
+         /* Not working yet
+        public function onePole(state:Object, coeffs:Object):void 
+        {
+        	if (_awaveMemoryDirty) {
+        		commitChannelData();
+        	}
+        	Sample._awave.onePole(getSamplePointer(), _descriptor.channels, _frames, coeffs, state);
+        	invalidateChannelData(); 	
+        }  
+        */
+        
+        /**
          * Biquad function runs a biquad filter function on the sample.
          * This function cannot be used for filters with continuously changing parameters.
          * @params state a 4 frame state sample that is needed to hold the filter delay line state
          * @params coeffs an object containing the filter coefficients, with values for a0,a1,a2,b0,b1,b2
          * Use the FilterCalculator class to obtain these.
          */
+         
         public function biquad(state:Sample, coeffs:Object):void 
         {
         	if (_awaveMemoryDirty) {
@@ -715,7 +734,7 @@ package com.noteflight.standingwave3.elements
         	Sample._awave.biquad(getSamplePointer(), state.getSamplePointer(), _descriptor.channels, _frames, coeffs);
         	invalidateChannelData(); 	
         }  
-          
+     
         /**
          * Standardize migrates a sample with any descriptor format to 44.1k stereo.
          * Mono signals are steroized, and 22050 Hz data is upsampled to 44100 Hz.
@@ -809,7 +828,7 @@ package com.noteflight.standingwave3.elements
         	destBytes.endian = "littleEndian";
         	Sample._awave.writeBytes(getSamplePointer(offset), destBytes, _descriptor.channels, _frames);
         } 
-        
+          
         public function copy(source:Sample, type:int):void
         {
         	if (_awaveMemoryDirty) {
@@ -820,6 +839,14 @@ package com.noteflight.standingwave3.elements
         	invalidateChannelData();
         }  
           
+        public function overdrive():void
+        {
+        	if (_awaveMemoryDirty) {
+        		commitChannelData();
+        	}
+        	Sample._awave.overdrive(getSamplePointer(), _descriptor.channels, _frames);
+        	invalidateChannelData();
+        }    
        
         /**
          * Clone this Sample.  Note that the sample memory is shared between the

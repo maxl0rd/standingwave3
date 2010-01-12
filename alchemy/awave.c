@@ -93,7 +93,7 @@ static int expandSpline(AS3_Val *modPoint, float *buffer, int frames)
 		}
 	}
 	return 0;
-}
+} 
 
 /* Returns a frequency in Hz for a midi note number */
 static inline float noteToFreq(float note) {
@@ -974,6 +974,74 @@ static AS3_Val biquad(void *self, AS3_Val args)
 	return 0;
 }
 
+static AS3_Val onePole(void *self, AS3_Val args)
+{
+	int bufferPosition;  int channels; int frames; int count; 
+	float *buffer; 
+	
+	AS3_Val coeffs; // coefficients object
+	AS3_Val state; // object for keeping filter state
+	
+	double a0d, a1d, b1d; // doubles from object
+	float a0, a1, b1; // filter coefficients
+	double lxd, lyd, rxd, ryd; // state object
+	float lx, ly; // left delay line 
+	float rx, ry; // right delay line 
+	
+	// Extract args
+	AS3_ArrayValue(args, "IntType, IntType, IntType, AS3ValType, AS3ValType", 
+		&bufferPosition, &channels, &frames, &coeffs, &state);
+	buffer = (float *) bufferPosition;
+		
+	// Extract filter coefficients from object	
+	AS3_ObjectValue(coeffs, "a0:DoubleType, a1:DoubleType, b1:DoubleType", &a0d, &a1d, &b1d);
+	// Cast to floats
+	a0 = (float) a0d; a1 = (float) a1d; b1 = (float) b1d; 	
+
+	// Make sure we recieved all the correct coefficients 
+	sprintf(trace, "One pole a0=%f a1=%f b1=%f ", a0, a1, b1);
+	sztrace(trace);
+		
+	// Pull state from state object
+	AS3_ObjectValue(state, "lx:DoubleType, ly:DoubleType, rx:DoubleType, ry:DoubleType", &lxd, &lyd, &rxd, &ryd);
+	// Cast to floats
+	lx = (float) lxd; ly = (float) lyd; rx = (float) rxd; ry = (float) ryd;
+	
+	// loop
+	// the formula is more or less ----- out[n] = in[n]*a0 + in[n-1]*a1 + out[n-1]*b1;
+	count = frames;
+	
+	if (channels == 1) {
+		while (count--) {
+			ly = *buffer*a0 + lx*a1 + ly*b1;
+			lx = *buffer + 1e-15 - 1e-15; // denormals zapped
+			// sprintf(trace, "out=%f", ly);
+			// sztrace(trace);
+			*buffer++ = ly;
+			sztrace(trace);
+		}
+	} else if (channels == 2) {
+		while (count--) {
+			ly = *buffer*a0 + lx*a1 + ly*b1; 
+			lx = *buffer + 1e-15 - 1e-15;
+			*buffer++ = ly; // left 
+			ry = *buffer*a0 + rx*a1 + ry*b1;
+			rx = *buffer + 1e-15 - 1e-15; 
+			*buffer++ = ry; // right 
+		}
+	}
+	
+	// Push state back to state object
+	AS3_Set(state, AS3_String("lx"), AS3_Number(lx));
+	AS3_Set(state, AS3_String("ly"), AS3_Number(ly));
+	AS3_Set(state, AS3_String("rx"), AS3_Number(rx));
+	AS3_Set(state, AS3_String("ry"), AS3_Number(ry));
+	
+	return 0;
+	
+}
+
+
 /**
  * Envelope this sample with a modPoint in dbGain.
  */
@@ -1013,6 +1081,65 @@ static AS3_Val envelope(void *self, AS3_Val args)
 	}
 	return 0;
 }
+
+/**
+ * Saturator stage
+ */
+static AS3_Val overdrive(void *self, AS3_Val args)
+{
+	int bufferPosition, channels, frames;
+	float *buffer; 
+	int count; 
+	float x;
+	
+	AS3_ArrayValue(args, "IntType, IntType, IntType", &bufferPosition, &channels, &frames);
+	buffer = (float *) bufferPosition;
+	count = frames*channels;
+	
+	while (count--) {
+		x = *buffer;
+		if( x < -3 ) {
+			*buffer++ = -1.0;
+		} else if( x > 3 ) {
+			*buffer++ = 1.0;
+		} else {
+			// Fast tangent-shaped approximation drive curve
+			*buffer++ = x * ( 27 + x * x ) / ( 27 + 9 * x * x );
+		}
+	}
+	
+	return 0;
+}
+
+/**
+ * Hard clipper stage
+ */
+static AS3_Val clip(void *self, AS3_Val args)
+{
+	int bufferPosition, channels, frames;
+	float *buffer; 
+	int count; 
+	float x;
+	
+	AS3_ArrayValue(args, "IntType, IntType, IntType", &bufferPosition, &channels, &frames);
+	buffer = (float *) bufferPosition;
+	count = frames*channels;
+	
+	while (count--) {
+		x = *buffer;
+		if( x < -1 ) {
+			*buffer++ = -1.0;
+		} else if( x > 1 ) {
+			*buffer++ = 1.0;
+		} else {
+			buffer++;
+		}
+	}
+	
+	return 0;
+}
+
+
 
 /**
  * Writes a sample out to an as3 byte array.
@@ -1083,6 +1210,9 @@ int main()
 	AS3_SetS(result, "biquad",  AS3_Function(NULL, biquad) );
 	AS3_SetS(result, "writeBytes", AS3_Function(NULL, writeBytes) );
 	AS3_SetS(result, "envelope", AS3_Function(NULL, envelope) );
+	AS3_SetS(result, "overdrive", AS3_Function(NULL, overdrive) );
+	AS3_SetS(result, "clip", AS3_Function(NULL, clip) );
+	AS3_SetS(result, "onePole", AS3_Function(NULL, onePole) );
 	
 	// make our note number to frequency lookup table
 	fillNoteLookupTable();
