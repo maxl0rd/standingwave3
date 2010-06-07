@@ -1,5 +1,5 @@
 Standing Wave 3 README
-Dec 15, 2009
+June 7, 2010
 
 ABOUT THIS PROJECT
 
@@ -30,18 +30,6 @@ reading MIDI files or by writing utility classes to manage tones,
 scales, instruments, and so forth.
 
 
-CONTENTS
-
-sw3/
-        The StandingWave code library and SWC.
-
-test/
-        A FlexUnit test suite for StandingWave.
-
-example/
-        A simple example demonstrating StandingWave features.
-
-
 FLASH and FLEX VERSION REQUIREMENTS
 
 StandingWave requires Flash Player 10.  It cannot be built or used
@@ -49,20 +37,23 @@ with Flash Player 9 or earlier.
 
 The library code is intended to be compiled with the Flex MXMLC
 compiler, not with the Flash IDE.  However there are no Flex APIs
-actually used in StandingWave.  The library sw3.swc may be included 
-in Flash CS3 or CS4 projects that target Flash Player 10.
+actually used in StandingWave.
 
-A working Adobe Alchemy install is necessary to recompile the C libraries.
+To use SW3, add the source to your Flex project, and add awave.swc to your library path.
+
+A working Adobe Alchemy install is necessary to recompile the C libraries, 
+but most users will not find this necessary. All alchemy routines are encapsulated
+within the ActionScript object "Sample".
 
 CONTRIBUTIONS WELCOME
 
-Please contact Joe Berkovitz at joe@noteflight.com if you are
-interested in contributing to this project.
+Please contact Joe Berkovitz at joe@noteflight.com or Max Lord maxlord@gmail.com 
+if you are interested in contributing to this project.
 
 
 LICENSE
 
-All materials in this project Copyright (c) 2009 Noteflight LLC.
+All materials in this project Copyright (c) 2010 Noteflight LLC.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
