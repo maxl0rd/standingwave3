@@ -38,6 +38,7 @@ float scratch1[16384];
 float scratch2[16384];
 float scratch3[16384];
 float scratch4[16384];
+short scratch5[16384];
 
 static inline float interpolate(float sample1, float sample2, float fraction) {
 	return sample1 + fraction * (sample2-sample1);
@@ -57,9 +58,24 @@ static inline float cubicInterpolate( float y0, float y1, float y2, float y3, fl
    return(a0*mu*mu2+a1*mu2+a2*mu+a3);
 }
  
+static int expandLine(float *buffer, float y1, float y2, int frames)
+{
+	
+	int count = frames;
+	float incr = 1 / (float) frames;
+	float p = 0.0;
+	while (count--) {
+		*buffer++ = interpolate(y1, y2, p);
+		p += incr;
+	}
+	
+	return 0;
+} 
+ 
 /* Expand a spline segment into a buffer */
 static int expandSpline(AS3_Val *modPoint, float *buffer, int frames) 
 {
+	
 	double y0Arg, y1Arg, y2Arg, y3Arg;
 	float y0, y1, y2, y3;
 	float p, incr;
@@ -73,7 +89,10 @@ static int expandSpline(AS3_Val *modPoint, float *buffer, int frames)
 	count = frames;
 	p = 0;
 	// Optimize continuous, linear, and cubic modes
-	if (y0 == y1 && y1 == y2 && y2 == y3) {
+	if (y0 == 0 && y1 == 0 && y2 == 0 && y3 == 0 ) {
+		// All values are zero
+		memset(buffer, 0, frames * 4);
+	} else if (y0 == y1 && y1 == y2 && y2 == y3) {
 		// All values are the same
 		while (count--) {
 			*buffer++ = y1;
@@ -124,13 +143,19 @@ static AS3_Val allocateSampleMemory(void* self, AS3_Val args)
 	int frames;
 	int channels;
 	int size;
+	int zero;
 	float *buffer;
 	
-	AS3_ArrayValue(args, "IntType, IntType", &frames, &channels);
+	AS3_ArrayValue(args, "IntType, IntType, IntType", &frames, &channels, &zero);
  
 	size = frames * channels * sizeof(float);
 	buffer = (float *) malloc(size); 
-	memset(buffer, 0, size);
+	
+	// If zero is true, then we must zero out this sample
+	// Otherwise, it is more efficient to leave it full of junk, if it's going to be overwritten
+	if (zero) {
+		memset(buffer, 0, size);
+	}
 	
 	// Return the sample pointer
 	return AS3_Int((int)buffer);  
@@ -292,54 +317,36 @@ static AS3_Val setSamples(void *self, AS3_Val args)
 {
 	float *buffer; int bufferPosition; int channels; int frames;
 	double valueArg; float value;	
-	int count;
+	int count, count16, remainder;
 	
 	AS3_ArrayValue(args, "IntType, IntType, IntType, DoubleType", &bufferPosition, &channels, &frames, &valueArg);
 	buffer = (float *) bufferPosition;
 	value = (float) valueArg;
 	
 	count = frames * channels;
-	if (count % 32 == 0) {
-		// I love to unroll, love to unroll
-		count /= 32;
-		while (count--) {
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-			*buffer++ = value;
-		}
-	} else {
-		while (count--) {
-			*buffer++ = value;
-		}
+	count16 = count / 16;
+	remainder = count % 16;
+	
+	while (count16--) {
+		*buffer++ = value;
+		*buffer++ = value;
+		*buffer++ = value;
+		*buffer++ = value;
+		*buffer++ = value;
+		*buffer++ = value;
+		*buffer++ = value;
+		*buffer++ = value;
+		*buffer++ = value;
+		*buffer++ = value;
+		*buffer++ = value;
+		*buffer++ = value;
+		*buffer++ = value;
+		*buffer++ = value;
+		*buffer++ = value;
+		*buffer++ = value;
+	} 
+	while (remainder--) {
+		*buffer++ = value;
 	}
 
 	return 0;
@@ -384,7 +391,7 @@ static AS3_Val mixIn(void *self, AS3_Val args)
 	double rightGainArg;
 	float leftGain;
 	float rightGain;
-	int count;
+	int count, count8, remainder;
 	
 	AS3_ArrayValue(args, "IntType, IntType, IntType, IntType, DoubleType, DoubleType", 
 		&bufferPosition, &sourceBufferPosition, &channels, &frames, &leftGainArg, &rightGainArg);
@@ -393,129 +400,48 @@ static AS3_Val mixIn(void *self, AS3_Val args)
 	leftGain = (float) leftGainArg;
 	rightGain = (float) rightGainArg;	
 	
-	// sprintf(trace, "channels=%d, frames=%d, leftGain=%f, rightGain=%f", channels, frames, leftGain, rightGain);
-	// sztrace(trace);
-	
 	count = frames;
+	count8 = count / 8;
+	remainder = count % 8;
+	
 	if (channels == 1) {
-		if (count % 32 == 0) {
-			// Massive unrolling optimization. Yes, this looks retarded, but it's 3x faster
-			count /= 32;
-			while (count--) {
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain;
-				*buffer++ += *sourceBuffer++ * leftGain;  
-			}
-		} else {
-			while (count--) {
-				*buffer++ += *sourceBuffer++ * leftGain; 
-			}
+		while (count8--) {
+			*buffer++ += *sourceBuffer++ * leftGain;
+			*buffer++ += *sourceBuffer++ * leftGain;
+			*buffer++ += *sourceBuffer++ * leftGain;
+			*buffer++ += *sourceBuffer++ * leftGain;
+			*buffer++ += *sourceBuffer++ * leftGain;
+			*buffer++ += *sourceBuffer++ * leftGain;
+			*buffer++ += *sourceBuffer++ * leftGain;
+			*buffer++ += *sourceBuffer++ * leftGain; 
+		}			
+		while (remainder--) {
+			*buffer++ += *sourceBuffer++ * leftGain; 
 		}
 	} else if (channels == 2) {
-		if (count % 32 == 0) {
-			count /= 32;
-			while (count--) {
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-
-			}
-		} else {
-			while (count--) {
-				*buffer++ += *sourceBuffer++ * leftGain; 		
-				*buffer++ += *sourceBuffer++ * rightGain;
-			}
+		while (count8--) {
+			*buffer++ += *sourceBuffer++ * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer++ * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer++ * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer++ * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer++ * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer++ * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer++ * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+			*buffer++ += *sourceBuffer++ * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
 		}
+		while (remainder--) {
+			*buffer++ += *sourceBuffer++ * leftGain; 		
+			*buffer++ += *sourceBuffer++ * rightGain;
+		}
+		
 	}
 	return 0;
 }
@@ -534,7 +460,7 @@ static AS3_Val mixInPan(void *self, AS3_Val args)
 	double rightGainArg;
 	float leftGain;
 	float rightGain;
-	int count;
+	int count, count16, remainder;
 	
 	AS3_ArrayValue(args, "IntType, IntType, IntType, DoubleType, DoubleType", 
 		&bufferPosition, &sourceBufferPosition, &frames, &leftGainArg, &rightGainArg);
@@ -542,82 +468,48 @@ static AS3_Val mixInPan(void *self, AS3_Val args)
 	sourceBuffer = (float *) sourceBufferPosition; 
 	leftGain = (float) leftGainArg;
 	rightGain = (float) rightGainArg;	
-	count = frames;
 	
-	if (count % 32 == 0) {
-		// Again, unroll 32x
-		count /= 32;
-		while (count--) {
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-		}
-	} else {
-		while (count--) {
-			*buffer++ += *sourceBuffer * leftGain; 		
-			*buffer++ += *sourceBuffer++ * rightGain;
-		}
+	count = frames;
+	count16 = count / 16;
+	remainder = count % 16;
+	
+	while (count16--) {
+		*buffer++ += *sourceBuffer * leftGain; 		
+		*buffer++ += *sourceBuffer++ * rightGain;
+		*buffer++ += *sourceBuffer * leftGain; 		
+		*buffer++ += *sourceBuffer++ * rightGain;
+		*buffer++ += *sourceBuffer * leftGain; 		
+		*buffer++ += *sourceBuffer++ * rightGain;
+		*buffer++ += *sourceBuffer * leftGain; 		
+		*buffer++ += *sourceBuffer++ * rightGain;
+		*buffer++ += *sourceBuffer * leftGain; 		
+		*buffer++ += *sourceBuffer++ * rightGain;
+		*buffer++ += *sourceBuffer * leftGain; 		
+		*buffer++ += *sourceBuffer++ * rightGain;
+		*buffer++ += *sourceBuffer * leftGain; 		
+		*buffer++ += *sourceBuffer++ * rightGain;
+		*buffer++ += *sourceBuffer * leftGain; 		
+		*buffer++ += *sourceBuffer++ * rightGain;
+		*buffer++ += *sourceBuffer * leftGain; 		
+		*buffer++ += *sourceBuffer++ * rightGain;
+		*buffer++ += *sourceBuffer * leftGain; 		
+		*buffer++ += *sourceBuffer++ * rightGain;
+		*buffer++ += *sourceBuffer * leftGain; 		
+		*buffer++ += *sourceBuffer++ * rightGain;
+		*buffer++ += *sourceBuffer * leftGain; 		
+		*buffer++ += *sourceBuffer++ * rightGain;
+		*buffer++ += *sourceBuffer * leftGain; 		
+		*buffer++ += *sourceBuffer++ * rightGain;
+		*buffer++ += *sourceBuffer * leftGain; 		
+		*buffer++ += *sourceBuffer++ * rightGain;
+		*buffer++ += *sourceBuffer * leftGain; 		
+		*buffer++ += *sourceBuffer++ * rightGain;
+		*buffer++ += *sourceBuffer * leftGain; 		
+		*buffer++ += *sourceBuffer++ * rightGain;
+	}
+	while (remainder--) {
+		*buffer++ += *sourceBuffer * leftGain; 		
+		*buffer++ += *sourceBuffer++ * rightGain;
 	}
 
 	return 0;
@@ -635,7 +527,7 @@ static AS3_Val multiplyIn(void *self, AS3_Val args)
 	float *sourceBuffer;
 	double gainArg;
 	float gain;
-	int count;
+	int count, count32, remainder;
 	
 	AS3_ArrayValue(args, "IntType, IntType, IntType, IntType, DoubleType", &bufferPosition, &sourceBufferPosition, &channels, &frames, &gainArg);
 	buffer = (float *) bufferPosition;
@@ -643,50 +535,47 @@ static AS3_Val multiplyIn(void *self, AS3_Val args)
 	gain = (float) gainArg;
 	
 	count = frames * channels;
+	count32 = count / 32;
+	remainder = count % 32;
 	
-	if (count % 32 == 0) {
-		// Unrolling this loop 32x dramatically increases performance.
-		// This will work with almost all buffer sizes, which should be factors of 2
-		count /= 32;
-		while (count--) {
-			*buffer++ *= *sourceBuffer++ * gain; 
-			*buffer++ *= *sourceBuffer++ * gain;
-			*buffer++ *= *sourceBuffer++ * gain;
-			*buffer++ *= *sourceBuffer++ * gain;
-			*buffer++ *= *sourceBuffer++ * gain;
-			*buffer++ *= *sourceBuffer++ * gain;
-			*buffer++ *= *sourceBuffer++ * gain;
-			*buffer++ *= *sourceBuffer++ * gain;
-			*buffer++ *= *sourceBuffer++ * gain; 
-			*buffer++ *= *sourceBuffer++ * gain;
-			*buffer++ *= *sourceBuffer++ * gain;
-			*buffer++ *= *sourceBuffer++ * gain;
-			*buffer++ *= *sourceBuffer++ * gain;
-			*buffer++ *= *sourceBuffer++ * gain;
-			*buffer++ *= *sourceBuffer++ * gain;
-			*buffer++ *= *sourceBuffer++ * gain;
-			*buffer++ *= *sourceBuffer++ * gain; 
-			*buffer++ *= *sourceBuffer++ * gain;
-			*buffer++ *= *sourceBuffer++ * gain;
-			*buffer++ *= *sourceBuffer++ * gain;
-			*buffer++ *= *sourceBuffer++ * gain;
-			*buffer++ *= *sourceBuffer++ * gain;
-			*buffer++ *= *sourceBuffer++ * gain;
-			*buffer++ *= *sourceBuffer++ * gain;
-			*buffer++ *= *sourceBuffer++ * gain; 
-			*buffer++ *= *sourceBuffer++ * gain;
-			*buffer++ *= *sourceBuffer++ * gain;
-			*buffer++ *= *sourceBuffer++ * gain;
-			*buffer++ *= *sourceBuffer++ * gain;
-			*buffer++ *= *sourceBuffer++ * gain;
-			*buffer++ *= *sourceBuffer++ * gain;
-			*buffer++ *= *sourceBuffer++ * gain;
-		}
-	} else {
-		while (count--) {
-			*buffer++ *= *sourceBuffer++ * gain;
-		}
+	while (count32--) {
+		*buffer++ *= *sourceBuffer++ * gain; 
+		*buffer++ *= *sourceBuffer++ * gain;
+		*buffer++ *= *sourceBuffer++ * gain;
+		*buffer++ *= *sourceBuffer++ * gain;
+		*buffer++ *= *sourceBuffer++ * gain;
+		*buffer++ *= *sourceBuffer++ * gain;
+		*buffer++ *= *sourceBuffer++ * gain;
+		*buffer++ *= *sourceBuffer++ * gain;
+		*buffer++ *= *sourceBuffer++ * gain; 
+		*buffer++ *= *sourceBuffer++ * gain;
+		*buffer++ *= *sourceBuffer++ * gain;
+		*buffer++ *= *sourceBuffer++ * gain;
+		*buffer++ *= *sourceBuffer++ * gain;
+		*buffer++ *= *sourceBuffer++ * gain;
+		*buffer++ *= *sourceBuffer++ * gain;
+		*buffer++ *= *sourceBuffer++ * gain;
+		*buffer++ *= *sourceBuffer++ * gain; 
+		*buffer++ *= *sourceBuffer++ * gain;
+		*buffer++ *= *sourceBuffer++ * gain;
+		*buffer++ *= *sourceBuffer++ * gain;
+		*buffer++ *= *sourceBuffer++ * gain;
+		*buffer++ *= *sourceBuffer++ * gain;
+		*buffer++ *= *sourceBuffer++ * gain;
+		*buffer++ *= *sourceBuffer++ * gain;
+		*buffer++ *= *sourceBuffer++ * gain; 
+		*buffer++ *= *sourceBuffer++ * gain;
+		*buffer++ *= *sourceBuffer++ * gain;
+		*buffer++ *= *sourceBuffer++ * gain;
+		*buffer++ *= *sourceBuffer++ * gain;
+		*buffer++ *= *sourceBuffer++ * gain;
+		*buffer++ *= *sourceBuffer++ * gain;
+		*buffer++ *= *sourceBuffer++ * gain;
 	}
+	while (remainder--) {
+		*buffer++ *= *sourceBuffer++ * gain;
+	}
+	
 	return 0;
 }
 
@@ -707,46 +596,77 @@ static AS3_Val wavetableIn(void *self, AS3_Val args)
 	int count; 
 	int intPhase;
 	float *wavetablePosition;
+	float *scratch;
+	double y1Arg, y2Arg;
+	float y1, y2;
+	float fractional, fractionalIncrement, instantBend;
 	
-	AS3_ArrayValue(args, "IntType, IntType, IntType, IntType, AS3ValType", 
-		&bufferPosition, &sourceBufferPosition, &channels, &frames, &settings);
-	AS3_ObjectValue(settings, "tableSize:IntType, phase:DoubleType, phaseAdd:DoubleType, phaseReset:DoubleType",
-		&tableSize, &phaseArg, &phaseAddArg, &phaseResetArg);
+	
+	
+	AS3_ArrayValue(args, "IntType, IntType, IntType, IntType, AS3ValType", &bufferPosition, &sourceBufferPosition, &channels, &frames, &settings);
+	AS3_ObjectValue(settings, "tableSize:IntType, phase:DoubleType, phaseAdd:DoubleType, phaseReset:DoubleType, y1:DoubleType, y2:DoubleType",
+		&tableSize, &phaseArg, &phaseAddArg, &phaseResetArg, &y1Arg, &y2Arg);
 
 	buffer = (float *) bufferPosition;
 	sourceBuffer = (float *) sourceBufferPosition; 
 	phaseAdd = (float) phaseAddArg * tableSize; // num source frames to add per output frames
 	phase = (float) phaseArg * tableSize; // translate into a frame count into the table
 	phaseReset = (float) phaseResetArg * tableSize;
+	y1 = (float) y1Arg;
+	y2 = (float) y2Arg;
+	
+	// Expand the pitch modulation into scratch
+	// expandLine(scratch1, y1, y2, frames); // draws spline segment into scratch1
+	// scratch = (float *) scratch1;	
 		
 	// Make sure we got everything right
-	// sprintf(trace, "Wavetable size=%d phase=%f phaseAdd=%f", tableSize, phase, phaseAdd);
-	// sztrace(trace);	
+	//sprintf(trace, "Wavetable size=%d phase=%f phaseAdd=%f y1=%f y2=%f", tableSize, phase, phaseAdd, y1, y2);
+	//sztrace(trace);	
 				
-	// phase goes from 0 to tableSize
 	count=frames;
+	fractional = 0.0;
+	fractionalIncrement = 1 / (float) frames;
+	
 	if (channels == 1) {
 		while (count--) {
 			while (phase >= tableSize) {
-				phase -= tableSize; // wrap phase to the loop point
-				phase += phaseReset;
+				if (phaseReset == -1) {
+					// no looping!
+					return 0; 
+				} else {
+					// wrap phase to the loop point
+					phase -= tableSize; 
+					phase += phaseReset;
+				}
 			}
 			intPhase = (int) phase; // int phase
 			wavetablePosition = sourceBuffer + intPhase;
 			*buffer++ = interpolate(*wavetablePosition, *(wavetablePosition+1), phase - intPhase);
-			phase += phaseAdd; 
-		}
+			// Increment phase by adjusting phaseAdd for instantaneous pitch bend 
+			instantBend = interpolate(y1, y2, fractional);
+			fractional += fractionalIncrement;
+			phase +=  phaseAdd * shiftToFreq(instantBend); 
+		}		
 	} else if (channels == 2 ) {
 		while (count--) {
 			while (phase >= tableSize) {
-				phase -= tableSize; // wrap phase to the loop point
-				phase += phaseReset;
+				if (phaseReset == -1) {
+					// no looping!
+					return 0; 
+				} else {
+					// wrap phase to the loop point
+					phase -= tableSize; 
+					phase += phaseReset;
+				}
 			}
 			intPhase = ((int)(phase*0.5))*2; // int phase, round to even frames, for each stereo frame pair
 			wavetablePosition = sourceBuffer + intPhase;
 			*buffer++ = interpolate(*wavetablePosition, *(wavetablePosition+2), phase - intPhase);
 			*buffer++ = interpolate(*(wavetablePosition+1), *(wavetablePosition+3), phase - intPhase);
-			phase += phaseAdd;
+			// Increment phase by adjusting phaseAdd for instantaneous pitch bend 
+			instantBend = interpolate(y1, y2, fractional);
+			fractional += fractionalIncrement;
+			phase +=  phaseAdd * shiftToFreq(instantBend);
 		}
 	}
 	
@@ -758,63 +678,39 @@ static AS3_Val wavetableIn(void *self, AS3_Val args)
 }
 
 /**
- * Scan in another wavetable with an accessory pitch shift table.
- * Wavetable should be at least one longer than the table size.
+ * Envelope this sample with a modPoint in dbGain.
  */
-static AS3_Val waveModIn(void *self, AS3_Val args)
+static AS3_Val envelope(void *self, AS3_Val args)
 {
-	AS3_Val settings;
-	int bufferPosition; int channels; int frames;
+	int bufferPosition, channels, frames;
 	float *buffer; 
-	int sourceBufferPosition;
-	float *sourceBuffer;
-	int pitchTablePosition;
-	float *pitchTable;
-	double phaseArg; float phase;
-	double phaseAddArg; float phaseAdd;
-	int tableSize;
-	int count; 
-	int intPhase;
-	float *wavetablePosition;
+	float *scratch;
+	AS3_Val modPoint;
+	int count, count8, remainder; 
 	
-	AS3_ArrayValue(args, "IntType, IntType, IntType, IntType, AS3ValType", 
-		&bufferPosition, &sourceBufferPosition, &channels, &frames, &settings);
-	AS3_ObjectValue(settings, "tableSize:IntType, phase:DoubleType, phaseAdd:DoubleType, pitchTable:IntType",
-		&tableSize, &phaseArg, &phaseAddArg, &pitchTablePosition);
-
+	AS3_ArrayValue(args, "IntType, IntType, IntType, AS3ValType", &bufferPosition, &channels, &frames, &modPoint);
 	buffer = (float *) bufferPosition;
-	sourceBuffer = (float *) sourceBufferPosition; 
-	pitchTable = (float *) pitchTablePosition; // pitch shift in note numbers per frame
-	phaseAdd = (float) phaseAddArg * tableSize; // num source frames to add per output frames
-	phase = (float) phaseArg * tableSize; // translate into a frame count into the table
-		
-	// waveModIn does not loop, so phase does not reset
-	count=frames;
-	if (channels == 1) {
-		while (count--) {
-			intPhase = (int) phase; // int phase
-			wavetablePosition = sourceBuffer + intPhase;
-			*buffer++ = interpolate(*wavetablePosition, *(wavetablePosition+1), phase - intPhase);
-			// sprintf(trace, "out=%f", *(buffer-1));
-			// sztrace(trace);
-			
-			// now we have to advance phase by the phaseAdd plus the pitch shift so...
-			phase += phaseAdd * shiftToFreq(*pitchTable++); 
-		}
-	} else if (channels == 2 ) {
-		while (count--) {
-			intPhase = ((int)(phase*0.5))*2; // int phase, round to even frames, for each stereo frame pair
-			wavetablePosition = sourceBuffer + intPhase;
-			*buffer++ = interpolate(*wavetablePosition, *(wavetablePosition+2), phase - intPhase);
-			*buffer++ = interpolate(*(wavetablePosition+1), *(wavetablePosition+3), phase - intPhase);
-			phase += phaseAdd * shiftToFreq(*pitchTable++); 
-		}
+	expandSpline(&modPoint, scratch1, frames); // draws spline segment into scratch1
+	scratch = (float *) scratch1;
+
+	count = frames*channels;
+	count8 = count / 8;
+	remainder = count % 8;
+	
+	while (count8--) {
+		*buffer++ *= dbToPower(*scratch++);
+		*buffer++ *= dbToPower(*scratch++);
+		*buffer++ *= dbToPower(*scratch++);
+		*buffer++ *= dbToPower(*scratch++);
+		*buffer++ *= dbToPower(*scratch++);
+		*buffer++ *= dbToPower(*scratch++);
+		*buffer++ *= dbToPower(*scratch++);
+		*buffer++ *= dbToPower(*scratch++);
 	}
-	
-	// Scale back down to a factor, and write the final phase value back to AS3
-	phase /= tableSize;
-	AS3_Set(settings, AS3_String("phase"), AS3_Number(phase));
-	
+	while (remainder--) {
+		*buffer++ *= dbToPower(*scratch++);
+	}
+
 	return 0;
 }
 
@@ -974,113 +870,7 @@ static AS3_Val biquad(void *self, AS3_Val args)
 	return 0;
 }
 
-static AS3_Val onePole(void *self, AS3_Val args)
-{
-	int bufferPosition;  int channels; int frames; int count; 
-	float *buffer; 
-	
-	AS3_Val coeffs; // coefficients object
-	AS3_Val state; // object for keeping filter state
-	
-	double a0d, a1d, b1d; // doubles from object
-	float a0, a1, b1; // filter coefficients
-	double lxd, lyd, rxd, ryd; // state object
-	float lx, ly; // left delay line 
-	float rx, ry; // right delay line 
-	
-	// Extract args
-	AS3_ArrayValue(args, "IntType, IntType, IntType, AS3ValType, AS3ValType", 
-		&bufferPosition, &channels, &frames, &coeffs, &state);
-	buffer = (float *) bufferPosition;
-		
-	// Extract filter coefficients from object	
-	AS3_ObjectValue(coeffs, "a0:DoubleType, a1:DoubleType, b1:DoubleType", &a0d, &a1d, &b1d);
-	// Cast to floats
-	a0 = (float) a0d; a1 = (float) a1d; b1 = (float) b1d; 	
 
-	// Make sure we recieved all the correct coefficients 
-	sprintf(trace, "One pole a0=%f a1=%f b1=%f ", a0, a1, b1);
-	sztrace(trace);
-		
-	// Pull state from state object
-	AS3_ObjectValue(state, "lx:DoubleType, ly:DoubleType, rx:DoubleType, ry:DoubleType", &lxd, &lyd, &rxd, &ryd);
-	// Cast to floats
-	lx = (float) lxd; ly = (float) lyd; rx = (float) rxd; ry = (float) ryd;
-	
-	// loop
-	// the formula is more or less ----- out[n] = in[n]*a0 + in[n-1]*a1 + out[n-1]*b1;
-	count = frames;
-	
-	if (channels == 1) {
-		while (count--) {
-			ly = *buffer*a0 + lx*a1 + ly*b1;
-			lx = *buffer + 1e-15 - 1e-15; // denormals zapped
-			// sprintf(trace, "out=%f", ly);
-			// sztrace(trace);
-			*buffer++ = ly;
-			sztrace(trace);
-		}
-	} else if (channels == 2) {
-		while (count--) {
-			ly = *buffer*a0 + lx*a1 + ly*b1; 
-			lx = *buffer + 1e-15 - 1e-15;
-			*buffer++ = ly; // left 
-			ry = *buffer*a0 + rx*a1 + ry*b1;
-			rx = *buffer + 1e-15 - 1e-15; 
-			*buffer++ = ry; // right 
-		}
-	}
-	
-	// Push state back to state object
-	AS3_Set(state, AS3_String("lx"), AS3_Number(lx));
-	AS3_Set(state, AS3_String("ly"), AS3_Number(ly));
-	AS3_Set(state, AS3_String("rx"), AS3_Number(rx));
-	AS3_Set(state, AS3_String("ry"), AS3_Number(ry));
-	
-	return 0;
-	
-}
-
-
-/**
- * Envelope this sample with a modPoint in dbGain.
- */
-static AS3_Val envelope(void *self, AS3_Val args)
-{
-	int bufferPosition, channels, frames;
-	float *buffer; 
-	float *scratch;
-	AS3_Val modPoint;
-	int count; 
-	
-	AS3_ArrayValue(args, "IntType, IntType, IntType, AS3ValType", &bufferPosition, &channels, &frames, &modPoint);
-	buffer = (float *) bufferPosition;
-	expandSpline(&modPoint, scratch1, frames); // draws spline segment into scratch1
-	scratch = (float *) scratch1;
-
-	count = frames*channels;
-	if (count % 8 == 0) 
-	{
-		count /= 8;
-		while (count--)
-		{
-			*buffer++ *= dbToPower(*scratch++);
-			*buffer++ *= dbToPower(*scratch++);
-			*buffer++ *= dbToPower(*scratch++);
-			*buffer++ *= dbToPower(*scratch++);
-			*buffer++ *= dbToPower(*scratch++);
-			*buffer++ *= dbToPower(*scratch++);
-			*buffer++ *= dbToPower(*scratch++);
-			*buffer++ *= dbToPower(*scratch++);
-		}
-	} else {
-		while (count--) 
-		{
-			*buffer++ *= dbToPower(*scratch++);
-		}
-	}
-	return 0;
-}
 
 /**
  * Saturator stage
@@ -1110,6 +900,65 @@ static AS3_Val overdrive(void *self, AS3_Val args)
 	
 	return 0;
 }
+
+/**
+ * Normalize volume to digital full scale -1 to 1
+ */
+static AS3_Val normalize(void *self, AS3_Val args)
+{
+	int bufferPosition, channels, frames;
+	float *buffer; 
+	int count, count8, remainder; 
+	double maxAmpArg;
+	float desiredMaxAmp;
+	float actualMaxAmp, actualMaxAmpNeg;
+	float gainFactor;
+	
+	AS3_ArrayValue(args, "IntType, IntType, IntType, DoubleType", &bufferPosition, &channels, &frames, &maxAmpArg);
+	buffer = (float *) bufferPosition;
+	desiredMaxAmp = (float) maxAmpArg;
+	
+	// Crawl the whole buffer and find the maximum sample value
+	count = frames * channels;
+	actualMaxAmp = 0.0;
+	actualMaxAmpNeg = 0.0; // maintain positive and negative limits to avoid a million calls to abs()
+	while (count--) {
+		if (*buffer > actualMaxAmp) {
+			actualMaxAmp = *buffer;
+			actualMaxAmpNeg = *buffer * -1.0;
+		} else if (*buffer < actualMaxAmpNeg) {
+			actualMaxAmp = *buffer * -1.0;
+			actualMaxAmpNeg = *buffer;
+		}
+		buffer++;
+	}
+	
+	// Calculate gain normalization factor
+	gainFactor = desiredMaxAmp / actualMaxAmp;
+	
+	// Adjust gain of entire buffer, with an unroll...
+	count = frames * channels;
+	count8 = count / 8;
+	remainder = count % 8;
+	buffer = (float *) bufferPosition;
+	while (count8--) {
+		*buffer++ *= gainFactor;
+		*buffer++ *= gainFactor;
+		*buffer++ *= gainFactor;
+		*buffer++ *= gainFactor;
+		*buffer++ *= gainFactor;
+		*buffer++ *= gainFactor;
+		*buffer++ *= gainFactor;
+		*buffer++ *= gainFactor;
+	}
+	while (remainder--) {
+		*buffer++ *= gainFactor;
+	}
+	
+	return 0;
+
+}
+ 
 
 /**
  * Hard clipper stage
@@ -1145,7 +994,6 @@ static AS3_Val clip(void *self, AS3_Val args)
  * Writes a sample out to an as3 byte array.
  * Used for final output to a sample handler.
  */
-
 static AS3_Val writeBytes(void *self, AS3_Val args) 
 {
 	int bufferPosition; int channels; int frames;
@@ -1160,6 +1008,95 @@ static AS3_Val writeBytes(void *self, AS3_Val args)
 	AS3_ByteArray_writeBytes(dst, buffer, len);
 	return 0;
 } 
+
+/**
+ * Writes a sample out to an as3 byte array in wav file format.
+ * Writes as fixed point 16 bit.
+ */
+static AS3_Val writeWavBytes(void *self, AS3_Val args) 
+{
+	int bufferPosition; int channels; int frames;
+	float *buffer;
+	AS3_Val dst;
+	int count;
+	short *wavOut;
+	int framesToWrite; int theseFramesToWrite;
+	
+	AS3_ArrayValue(args, "IntType, AS3ValType, IntType, IntType", &bufferPosition, &dst, &channels, &frames);
+	buffer = (float *) bufferPosition;
+	
+	framesToWrite = frames * channels;
+	
+	// Convert and output wav bytes in 16k chunks
+	// Convert each buffer into scratch memory, and then writeBytes 
+	
+	while (framesToWrite > 0) {
+		
+		theseFramesToWrite = framesToWrite;
+		if (theseFramesToWrite > 16384) {
+			theseFramesToWrite = 16384;
+		}
+		framesToWrite -= theseFramesToWrite;
+		count = theseFramesToWrite;
+		
+		wavOut = scratch5; // scratch buffer 5 is 16k of shorts
+		while (count--)  {
+			*wavOut++ = (short) (*buffer++ * 32768 + 0.5 ); 
+		}
+		wavOut = scratch5;
+	
+		AS3_ByteArray_writeBytes(dst, wavOut, theseFramesToWrite * 2 ); // 2 bytes per short
+	
+	}
+	
+	return 0;
+} 
+
+static AS3_Val readWavBytes(void *self, AS3_Val args) 
+{
+	int bufferPosition; int channels; int frames; int bitDepth;
+	float *buffer;
+	AS3_Val wavBytes;
+	int count; int framesToRead; int theseFramesToRead;
+	short *wavIn;
+	float divisor;
+	
+	// It's way slow to call writeBytes for every frame
+	// We need to use a scratch buffer and fill it with shorts
+	// And then make one call to writeBytes
+	
+	// AS3 ARGS:  buffer:uint, wavBytes:ByteArray, bitsPerSample:int, channels: int, frames: int
+	
+	AS3_ArrayValue(args, "IntType, AS3ValType, IntType, IntType, IntType", &bufferPosition, &wavBytes, &bitDepth, &channels, &frames);
+	buffer = (float *) bufferPosition;
+	framesToRead = frames * channels;
+	divisor = 1 / pow(2, bitDepth);
+	
+	// Divide the wav data into 16k buffers because each call to readBytes is slow
+	// Scan each buffer of wav data (shorts) and divide down to floating point
+	// Loop until all the data is read
+	
+	while (framesToRead > 0) {
+		
+		wavIn = scratch5; // scratch buffer 5 is 16k of shorts
+		
+		theseFramesToRead = framesToRead;
+		if (theseFramesToRead > 16384) {
+			theseFramesToRead = 16384;
+		}
+		framesToRead -= theseFramesToRead;
+		
+		AS3_ByteArray_readBytes(wavIn, wavBytes, theseFramesToRead * 2 ); // 2 bytes per short
+		count = theseFramesToRead;
+		while (count--) {
+			*buffer++ = (float) (*wavIn++ * divisor);
+		}
+
+	}
+	
+	return 0;
+	
+}
 
 
 static int fillNoteLookupTable()
@@ -1205,14 +1142,15 @@ int main()
 	AS3_SetS(result, "multiplyIn",  AS3_Function(NULL, multiplyIn) );
 	AS3_SetS(result, "standardize",  AS3_Function(NULL, standardize) );
 	AS3_SetS(result, "wavetableIn",  AS3_Function(NULL, wavetableIn) );
-	AS3_SetS(result, "waveModIn",  AS3_Function(NULL, waveModIn) );
 	AS3_SetS(result, "delay",  AS3_Function(NULL, delay) );
 	AS3_SetS(result, "biquad",  AS3_Function(NULL, biquad) );
 	AS3_SetS(result, "writeBytes", AS3_Function(NULL, writeBytes) );
 	AS3_SetS(result, "envelope", AS3_Function(NULL, envelope) );
 	AS3_SetS(result, "overdrive", AS3_Function(NULL, overdrive) );
 	AS3_SetS(result, "clip", AS3_Function(NULL, clip) );
-	AS3_SetS(result, "onePole", AS3_Function(NULL, onePole) );
+	AS3_SetS(result, "normalize", AS3_Function(NULL, normalize) );
+	AS3_SetS(result, "writeWavBytes", AS3_Function(NULL, writeWavBytes) );
+	AS3_SetS(result, "readWavBytes", AS3_Function(NULL, readWavBytes) );
 	
 	// make our note number to frequency lookup table
 	fillNoteLookupTable();

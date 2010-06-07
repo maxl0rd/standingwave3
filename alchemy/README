@@ -1,6 +1,6 @@
 ALCHEMICAL WAVE
 
-This is a small Adobe Alchemy library that runs the low level audio routines for Standing Wave 3. You will need to download the Alchemy dev kit for your platform from Adobe Labs to recompile the awave.swc. Warning, hacks ahead!
+This is a small Adobe Alchemy library that runs the low level audio routines for Standing Wave 3. You will need to download the Alchemy dev kit for your platform from Adobe Labs to recompile the awave.swc.
 
 Download from:
 http://labs.adobe.com/downloads/alchemy.html
@@ -16,3 +16,4 @@ Once you're set up, you should be able to compile by running:
 > alc-on
 > gcc awave.c -O3 -Wall -swc -o awave.swc
 
+It's entirely possible, you don't have to do this, and can just include the awave.swc library in your project. If you prefer, you can also dynamically load the awave.swf library at runtime. Your call!
