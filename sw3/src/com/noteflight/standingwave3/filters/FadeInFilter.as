@@ -17,6 +17,7 @@
 package com.noteflight.standingwave3.filters
 {
     import com.noteflight.standingwave3.elements.*;
+    import com.noteflight.standingwave3.modulation.*;
     import com.noteflight.standingwave3.filters.AbstractFilter;
     
     /**

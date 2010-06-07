@@ -18,7 +18,7 @@ package com.noteflight.standingwave3.sources
 {
     import __AS3__.vec.Vector;
     
-    import com.noteflight.standingwave3.elements.*
+    import com.noteflight.standingwave3.elements.*;
     
     /**
      * AbstractSource is an implementation superclass for IAudioSource implementations
@@ -30,9 +30,9 @@ package com.noteflight.standingwave3.sources
         /** Audio descriptor for this source. */
         protected var _descriptor:AudioDescriptor;
         protected var _position:Number;
+        protected var _duration:Number;
 
         public var amplitude:Number;
-        public var duration:Number;
         
         public static const MAX_DURATION:Number = int.MAX_VALUE;
 
@@ -46,8 +46,13 @@ package com.noteflight.standingwave3.sources
         {
             _descriptor = descriptor;
             this.amplitude = amplitude;
-            this.duration = duration;
+            _duration = duration;
             _position = 0;
+        }
+
+        public function get duration():Number
+        {
+            return _duration;
         }
         
         protected function generateChannel(data:Vector.<Number>, channel:Number, numFrames:Number):void

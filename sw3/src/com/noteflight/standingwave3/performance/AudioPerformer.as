@@ -23,7 +23,7 @@ package com.noteflight.standingwave3.performance
     
     /**
      * An AudioPerformer takes a Performance containing a queryable collection of
-     * PerformanceElements (i.e. timed playbacks of audio sources) and exposes
+     * PerformableAudioSources (i.e. timed playbacks of audio sources) and exposes
      * it as an IAudioSource that can realize time samples of the performance output.
      * The main job of the AudioPerformer is to mix together all the performance
      * elements, time-shifted appropriately.
@@ -36,7 +36,8 @@ package com.noteflight.standingwave3.performance
         private var _performance:IPerformance;
         private var _position:Number = 0;
         private var _frameCount:Number = 0;
-        private var _activeElements:Vector.<PerformanceElement>;
+        private var _activeElements:Vector.<PerformableAudioSource>;
+		private var _descriptor:AudioDescriptor;
                 
         /**
          * Construct a new AudioPerformer for a performance.
@@ -44,10 +45,11 @@ package com.noteflight.standingwave3.performance
          * @param performance the IPerformance implementation to be performed when this
          * AudioPerformer is rendered as an IAudioSource.
          */
-        public function AudioPerformer(performance:IPerformance)
+        public function AudioPerformer(performance:IPerformance, descriptor:AudioDescriptor)
         {
             _performance = performance;
             _frameCount = performance.frameCount;
+            _descriptor = descriptor;
             resetPosition();
         }
         
@@ -67,10 +69,12 @@ package com.noteflight.standingwave3.performance
         
         /**
          * The AudioDescriptor describing the audio characteristics of this source.
+         * This can be set explicitly (for performance reasons) or default to whatever it
+         * finds in the performance (which can be annoying at times)
          */
         public function get descriptor():AudioDescriptor
         {
-            return _performance.descriptor;
+        	return _descriptor;
         }
         
         /**
@@ -100,7 +104,7 @@ package com.noteflight.standingwave3.performance
         public function resetPosition():void
         {
             _position = 0;
-            _activeElements = new Vector.<PerformanceElement>();
+            _activeElements = new Vector.<PerformableAudioSource>();
         }
         
         
@@ -110,23 +114,24 @@ package com.noteflight.standingwave3.performance
         */
         public function getSample(numFrames:Number):Sample
         {
+        	
             // create our result sample and zero its samples out so we can add in the
             // audio from performance events that intersect our time interval.
-            var sample:Sample = new Sample(descriptor, numFrames);
+            var sample:Sample = new Sample(_descriptor, numFrames);
                         
-            // Maintain a list of all PerformanceElements known to be active at the current
+            // Maintain a list of all PerformableAudioSources known to be active at the current
             // audio cursor position.
-            var _stillActive:Vector.<PerformanceElement> = new Vector.<PerformanceElement>();
+            var _stillActive:Vector.<PerformableAudioSource> = new Vector.<PerformableAudioSource>();
             
-            var element:PerformanceElement;
+            var element:PerformableAudioSource;
             var i:Number;
             var j:Number;
             var c:Number;
             
             // Prior to generating any audio date, update the active element list with 
-            // any PerformanceElements that intersect the time interval of interest.
+            // any PerformableAudioSources that intersect the time interval of interest.
             //
-            var elements:Vector.<PerformanceElement> = _performance.getElementsInRange(_position, _position + numFrames);
+            var elements:Vector.<PerformableAudioSource> = _performance.getElementsInRange(_position, _position + numFrames);
             for (i = 0; i < elements.length; i++)
             {
                 elements[i].source.resetPosition();
@@ -137,6 +142,9 @@ package com.noteflight.standingwave3.performance
             // into our result sample, and retaining them in the next copy of the active list
             // if they continue past this time window.
             //
+            
+            // trace("Voices: " + this._activeElements.length);
+            
             for each (element in _activeElements)
             {
                 // First, determine the offset within our result where we'll put this element's first frame
@@ -149,7 +157,7 @@ package com.noteflight.standingwave3.performance
                 if (activeLength > 0)
                 {
       				// Mix the element into the output mix bus
-                	mix(sample, element, activeOffset, activeLength, _performance.stereoize);	
+                	mix(sample, element, activeOffset, activeLength);	
                 }
                 
                 // If this element is still going to be active in the next batch of frames, take note of that.
@@ -167,14 +175,14 @@ package com.noteflight.standingwave3.performance
         
         /** Mix buss. Can mix stereo samples, mono samples, or pan out mono sources to a stereo buss.
         */
-        private function mix(sample:Sample, element:PerformanceElement, activeOffset:Number, activeLength:Number, stereoize:Boolean=false):void
+        private function mix(sample:Sample, element:PerformableAudioSource, activeOffset:Number, activeLength:Number, stereoize:Boolean=false):void
         {
         	// Calculate gain which is the element's mix gain plus the total mix bus gain
         	var fgain:Number = AudioUtils.decibelsToFactor( mixGain + element.gain );
         	var p:Number;
         	var elementSample:Sample;
         	
-        	if (stereoize && element.source.descriptor.channels == AudioDescriptor.CHANNELS_MONO) {
+        	if (_descriptor.channels == 2 && element.source.descriptor.channels == 1) {
          		// Do a stereo panning mix of mono elements. 
          		// Look at the pan position of each element and call mixInPan instead
          		if (descriptor.rate == element.source.descriptor.rate) {
@@ -198,8 +206,8 @@ package com.noteflight.standingwave3.performance
     			// Optimize the mixing of IDirectAccessSources vs IAudioSources
     			if (AudioDescriptor.compare(descriptor, element.source.descriptor)) {
 	            	if (testIDirect(element, activeLength)) {
-	            		IDirectAccessSource(element.source).useSample(activeLength);
 	            		p = element.source.position;
+	            		IDirectAccessSource(element.source).useSample(activeLength);
 	            		// Mix it in, without using an intermediate sample
 	            		sample.mixInDirectAccessSource(IDirectAccessSource(element.source), p, fgain, activeOffset, activeLength);
 	            	} else {
@@ -217,8 +225,11 @@ package com.noteflight.standingwave3.performance
         /** 
          * Determine whether an element's source is usable as an IDirectSource for this range 
          */
-        private function testIDirect(element:PerformanceElement, numFrames:Number):Boolean 
+        private function testIDirect(element:PerformableAudioSource, numFrames:Number):Boolean 
         {
+        	
+        	// LET'S TRY TO GET THIS WORKING RIGHT 
+        	
         	var source:IDirectAccessSource;
         	if (element.source is IDirectAccessSource) {
         		// Fill the source to this point, and then check that the pointer is valid
@@ -231,16 +242,19 @@ package com.noteflight.standingwave3.performance
         			// This range is not valid for direct access for some reason
         			// Treat it as an IAudioSource
         			return false;
+        			trace("Not direct");
         		}
         	} else {
         		// Not an IDirectAudioSource
+        		trace("Not direct");
         		return false;
         	}
+        	
         }
         
         public function clone():IAudioSource
         {
-            var p:AudioPerformer = new AudioPerformer(_performance.clone());
+            var p:AudioPerformer = new AudioPerformer(_performance.clone(), _descriptor);
             p._frameCount = _frameCount; 
             return p;
         }

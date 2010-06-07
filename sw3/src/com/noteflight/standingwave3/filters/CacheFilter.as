@@ -17,7 +17,7 @@
 package com.noteflight.standingwave3.filters
 {
  	import com.noteflight.standingwave3.elements.*;
-    import flash.utils.getTimer;
+ 
     
     /**
      * This audio filter does not transform its underlying source.  It merely caches its
@@ -25,9 +25,28 @@ package com.noteflight.standingwave3.filters
      * from the first frame up to the last frame requested via a call to getSample().  This
      * is useful for performance reasons, and is also a way to turn any IAudioSource
      * into an IRandomAccessSource.
+     * Because allocating the sample memory can be expensive, you can set a max size for a cache
+     * and allow it to resize or not.
      */
     public class CacheFilter implements IAudioFilter, IRandomAccessSource, IDirectAccessSource
     {
+    	// This is the maximum amount of data a cache will hold
+    	// The cache will not increase in size beyond this number of frames
+    	
+    	public static var MAX_CACHE:Number = 65536; // 64k frames ~= 1.5 sec
+    	public static var INITIAL_SIZE:Number = 65536;
+    	
+    	/** The maximum number of frames the cache will ever cache or grow to */
+    	public var maxFrameCount:Number = MAX_CACHE;
+    	
+    	/** The initial number of frames the cache sample will start at */
+    	public var initialFrameCount:Number = INITIAL_SIZE;
+    	
+    	/** A boolean representing whether a cache is allowed to grow or not.
+    	 * Reallocating sample memory during playback can cause major problems
+    	 * so be careful with this. Defaults to false. */
+    	public var resizable:Boolean = false; 
+    	
         private var _cache:Sample;
         private var _position:Number;
         private var _source:IAudioSource;
@@ -55,13 +74,12 @@ package com.noteflight.standingwave3.filters
                 if (_cache) {
                 	_cache.destroy();
                 }
-                if (source.frameCount >= int.MAX_VALUE) {
-                	// An infinite source needs to initialize a cache, and then realloc as it grows.
-                	// We will start the cache at 2 seconds, and then double the length any time a call to fill overruns
-                	_cache = new Sample(source.descriptor, source.descriptor.rate * 2);
+                if (_source.frameCount >= maxFrameCount) {
+                	// An infinite or very long source needs to initialize a cache, and then realloc as it grows.
+                	_cache = new Sample(_source.descriptor, initialFrameCount, true);
                 } else {
-                	// We know how long the source is, so we'll make a cache sample exactly the right size
-                	_cache = new Sample(source.descriptor, source.frameCount);
+                	// We know how long the source is, and it's small, so we'll make a cache sample exactly the right size
+                	_cache = new Sample(_source.descriptor, _source.frameCount, true);
                 }
                 
                 // Reset the source's position since we've cached none of it yet
@@ -82,17 +100,21 @@ package com.noteflight.standingwave3.filters
          */
         public function get frameCount():Number
         {
-            return source.frameCount;
+            return Math.min(source.frameCount, _cache.frameCount);
         }
         
-        public function getSamplePointer(frameOffset:Number = 0):uint {
+        public function getSamplePointer(frameOffset:Number = 0):uint 
+        {
         	if (frameOffset > _source.position) {
-        		// We're not giving you a pointer to sample memory we haven't filled yet
-        		return null;
-        	} else {
-        		return _cache.getSamplePointer(frameOffset);
+        		// We're not giving you a pointer to sample memory we haven't filled yet!
+        		// trace("No pointer, source position exceeded");
+        		return 0;
+        	} else if (frameOffset > _cache.frameCount) {
+        		// We cannot give you a pointer to cache that doesn't exist! Too far out
+        		// trace("No pointer, cache size exceeded");
+        		return 0;
         	}
-        	
+        	return _cache.getSamplePointer(frameOffset);
         }
         
         /**
@@ -119,7 +141,14 @@ package com.noteflight.standingwave3.filters
         public function getSampleRange(fromOffset:Number, toOffset:Number):Sample
         {
             fill(toOffset);
-            return _cache.getSampleRange(fromOffset, toOffset);
+            if (toOffset <= _cache.frameCount) {
+            	// Return a slice from the cache
+           		return _cache.getSampleRange(fromOffset, toOffset);
+            } else {
+            	// We're outside the cache range. Throw an error
+            	throw new Error("CacheFilter.getSampleRange() called beyond cache bounds.");
+            }
+            return null;
         }
          
         /**
@@ -153,14 +182,19 @@ package com.noteflight.standingwave3.filters
             }
             
             if (toOffset > _cache.frameCount) { 
-            	// We need to grow the cache sample to accommodate this source
-            	// Double the size to save narsty realloc calls
-            	// Realloc is *not fast* for large caches so be careful with this
-            	// In general, realloc of anything north of 20 seconds is going to blow a sample event handler
-            	var oldTime:Number = getTimer();  
-            	_cache.realloc( _cache.frameCount*2 );
-            	var delta:Number = getTimer() - oldTime;
+            	if (!resizable) {
+            		throw new Error("Fill called beyond the bounds of an unresizable CacheFilter");
+            		return;
+            	}
+            	// We need to grow the cache sample to accommodate this source	
+            	// New size is the lesser of twice the existing size, or the mix size
+            	var newSize:Number = Math.min(_cache.frameCount*2, maxFrameCount);
+            	
+            	// var oldTime:Number = getTimer();  
+            	_cache.realloc(newSize);
+            	// var delta:Number = getTimer() - oldTime;
             	// trace("Reallocated cache sample to " + _cache.frameCount + " in " + delta + " ms.");
+            	
             }
             
             if (toOffset > source.position)

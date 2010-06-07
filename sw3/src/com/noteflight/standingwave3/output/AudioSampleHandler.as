@@ -21,6 +21,7 @@ package com.noteflight.standingwave3.output
     import flash.events.EventDispatcher;
     import flash.events.SampleDataEvent;
     import flash.media.SoundChannel;
+    import flash.utils.ByteArray;
     import flash.utils.getTimer;
  
     /** Dispatched when the currently playing sound has completed. */
@@ -117,6 +118,8 @@ package com.noteflight.standingwave3.output
             return 0;
         }
         
+        
+        
         /**
          * Handle a request by the player for a block of samples. 
          */
@@ -148,30 +151,45 @@ package com.noteflight.standingwave3.output
             var frame:Number;
             frame = e.position - _startFrame;
             
-            // See if we totally blew it 
-            if (frame > _source.position) {
-            	// We've been dropping frames. Keep track of how far off we are.
-            	_deadFrames = e.position - _source.position;
-            	// trace("Dead frames at " + frame + " = " + _deadFrames);
-            } else {
-            	// trace("Healthy handler at " + frame);
+            if (_source != null)
+            { 
+                // We have a live source to work with.
+                if (frame > _source.position) {
+                	// We've been dropping frames. Keep track of how far off we are.
+                	_deadFrames = e.position - _source.position;
+                	// trace("Dead frames at " + frame + " = " + _deadFrames);
+                } else {
+                	// trace("Healthy handler at " + frame);
+                }
+
+                // Determine amount left that we could conceivably deliver, pinned back
+                // to the max that we can return.
+                //
+    			length = _source.frameCount - frame;
+                
+    			if (length > framesPerCallback) {
+    				length = framesPerCallback;
+    			}
             }
-            
-			length = source.frameCount - frame;
-			if (length > framesPerCallback) {
-				length = framesPerCallback;
-			}
+            else
+            {
+                // The source can be set to null by AudioPlayer.stop()
+                // as a clean way of stopping the handler on the next callback.
+                // This works better than stopping the channel forcibly.
+                //
+                length = 0;
+            }
            
 			if (length > 0)
 			{	
 				// Get our output Sample.
-				sample = source.getSample(length);  
-				
+				sample = _source.getSample(length);  
+								
 				/* For testing load hell, you can add a horrible random delay here
 				Obviously, do not turn this on unless you want to suck.
 				if (Math.random() > 0.8) {
 					for (var d:int=0; d < 500000; d++) {
-						var stupid = Math.atan( Math.random() );
+						var stupid:Number = Math.atan( Math.random() );
 					}
 				}
 				*/
@@ -185,7 +203,7 @@ package com.noteflight.standingwave3.output
             {
                 _source = null;
                 _sourceStarted = false;
-                dispatchEvent(new Event(Event.COMPLETE));
+                dispatchEvent(new Event(Event.SOUND_COMPLETE)); // Event.SOUND_COMPLETE
             }
             else if (length > 0 && length < framesPerCallback)
             {
@@ -196,6 +214,7 @@ package com.noteflight.standingwave3.output
                     e.data.writeFloat(0);
                     e.data.writeFloat(0);
                 }
+                dispatchEvent(new Event(Event.SOUND_COMPLETE)); // Event.SOUND_COMPLETE
             }
 
             // Calculate CPU utilization
@@ -211,8 +230,9 @@ package com.noteflight.standingwave3.output
             	//   so we'll publish a moving average of the last 5 cpu calculations
             	// var instantaneousCpu:Number = 100 * (getTimer() - now) / (now - _lastSampleTime);
                 // cpuPercentage = Math.floor(cpuPercentage*0.8 + instantaneousCpu*0.2);
-                // trace("cpu:", cpuPercentage, "latency:", latency, "interval:", now - _lastSampleTime);
+                // trace("cpu: ", cpuPercentage + "%");
                 cpuPercentage = Math.floor(100 * (getTimer() - now) / (now - _lastSampleTime));
+                // trace("cpu: ", cpuPercentage + "%");
             }
             _lastSampleTime = now;
         }

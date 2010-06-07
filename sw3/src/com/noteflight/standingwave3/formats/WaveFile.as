@@ -16,10 +16,11 @@
 
 package com.noteflight.standingwave3.formats
 {
-    import com.noteflight.standingwave3.elements.*
+    import com.noteflight.standingwave3.elements.*;
     
     import flash.utils.ByteArray;
     import flash.utils.Endian;
+    import flash.utils.getTimer;
     
     /**
      * The WaveFile class translates between audio files in the WAV format and
@@ -32,6 +33,8 @@ package com.noteflight.standingwave3.formats
         private static const WAVE_TYPE:String = "WAVE";
         private static const FORMAT_CHUNK:String = "fmt ";
         private static const DATA_CHUNK:String = "data";
+        private static const SAMPLE_CHUNK:String = "smpl";      
+        private static const INSTRUMENT_CHUNK:String = "inst";  
         private static const UNCOMPRESSED_FORMAT:uint = 1;
         private static const HEADER_OFFSET:uint = 36;
         private static const SUBCHUNK_SIZE_PCM:uint = 16;
@@ -65,10 +68,17 @@ package com.noteflight.standingwave3.formats
             {
                 var chunkType:String = wav.readUTFBytes(4);
                 var chunkSize:uint = wav.readUnsignedInt();
+                if ((chunkSize % 2) == 1)
+                {
+                   // wav spec says: round chunks to even bytes, so force to word boundary
+                   chunkSize += 1;
+                }
                 var chunkStart:uint = wav.position;
                 var blockAlign:uint = 0;
                 var bitsPerSample:uint;
-                
+                var channels:uint;
+                var rate:uint;
+                        
                 switch(chunkType)
                 {
                     case FORMAT_CHUNK:
@@ -77,72 +87,33 @@ package com.noteflight.standingwave3.formats
                         {
                             throw new Error("Cannot handle compressed WAV data");
                         }
-                        var channels:uint = wav.readUnsignedShort();
-                        var rate:uint = wav.readUnsignedInt();
+                        channels = wav.readUnsignedShort();
+                        rate = wav.readUnsignedInt();
                         var dwAvgBytesPerSec:uint = wav.readUnsignedInt();
                         blockAlign = wav.readUnsignedShort();
                         bitsPerSample = wav.readUnsignedShort();
-                        sample = new Sample(new AudioDescriptor(rate, channels), 0);
                         break;
+                    
+                    case SAMPLE_CHUNK:
+                    	// Read in loop data, and put it where ... ?!
+                    	break;
+                    	
+                    case INSTRUMENT_CHUNK:
+                    	// Read in instrument data, and put it where ... ?!
+                    	break;
                         
                     case DATA_CHUNK:
+                    
+                    	// Read the descriptor
                         var numSamples:uint = chunkSize / (bitsPerSample >> 3);
-                        var numFrames:uint = numSamples / sample.channels;
-                        var i:uint;
-                        var c:uint = 0;
-                        var j:uint = 0;
-                        switch (bitsPerSample)
-                        {
-                            case 8:
-                                for (i = 0; i < numSamples; i++)
-                                {
-                                    sample.channelData[c++][j] = wav.readByte() / 128.0;
-                                    if (c == sample.channels)
-                                    {
-                                        c = 0;
-                                        j++;
-                                    }
-                                }
-                                break;
-                                
-                            case 16:
-                                switch (sample.channels)
-                                {
-                                    case AudioDescriptor.CHANNELS_MONO:
-                                        var data1:Vector.<Number> = sample.channelData[0];
-                                        for (i = 0; i < numFrames; i++)
-                                        {
-                                            data1[j++] = wav.readShort() / 32768.0;
-                                        }
-                                        break;
-
-                                    case AudioDescriptor.CHANNELS_STEREO:
-                                        data1 = sample.channelData[0];
-                                        var data2:Vector.<Number> = sample.channelData[1];
-                                        for (i = 0; i < numFrames; i++)
-                                        {
-                                            data1[j] = wav.readShort() / 32768.0;
-                                            data2[j++] = wav.readShort() / 32768.0;
-                                        }
-                                        break;
-
-                                    default:
-                                        for (i = 0; i < numSamples; i++)
-                                        {
-                                            sample.channelData[c++][j] = wav.readShort() / 32768.0;
-                                            if (c == sample.channels)
-                                            {
-                                                c = 0;
-                                                j++;
-                                            }
-                                        }
-                                        break;
-                                }
-                                break;
-                            
-                            default:
-                                throw new Error("Unsupported bits per sample: " + bitsPerSample);
-                        }
+                        var numFrames:uint = numSamples / channels;
+                        
+                        // Allocate sample memory
+                        sample = new Sample(new AudioDescriptor(rate, channels), numFrames);
+                       
+                       	// Convert the wav data byte array into native floating point sample format
+                        sample.readWavBytes(wav, bitsPerSample, sample.channels, numFrames);
+                        
                         break;
                 }
                 wav.position = chunkStart + chunkSize;
@@ -150,9 +121,70 @@ package com.noteflight.standingwave3.formats
             return sample;
         }
         
-        public static function writeHeader(dataSize:uint, sampleRate:uint, numChannels:uint, bitDepth:uint):ByteArray
+        /**
+         * Convert a StandingWave Sample to a 16bit Wave file
+         * 
+         * @param sample the sample to convert
+         * @returns a ByteArray containing the complete wave file data, including header
+         */  
+        public static function writeSampleToWavFile(sample:Sample):ByteArray
         {
-            var wavData:ByteArray = new ByteArray();  
+        	var wavData:ByteArray = new ByteArray(); // final file
+       		wavData.endian = Endian.BIG_ENDIAN;
+       		
+       		// Size in bytes = number of frames * channels * 2 bytes per 16 bit word
+       		// Don't worry about rounding to word, since we're on 16 bit
+       		var dataSize:uint = sample.frameCount * sample.descriptor.channels * 2;
+       		
+       		// Write header
+            WaveFile.writeHeader(wavData, dataSize, sample.descriptor.rate, sample.descriptor.channels, 16);
+       		
+       		// Write data
+       		sample.writeWavBytes(wavData);
+       		
+       		return wavData;
+        }
+        
+        /**
+         * Converts a ByteArray containing raw fixed point audio data into a Wave file.
+         * Works by generating a WAV header, and then copying the raw data after.
+         * 
+         * @param wavData the destination ByteArray in which to create the Wave file.
+         * @param rawDataBytes the source ByteArray containing raw fixed point audio data
+         * @param sampleRate the sampling rate of the raw audio data
+         * @param numChannels the number of interleaved channels of audio data
+         * @param bitDepth the bit depth of the audio data
+         */
+        public static function writeBytesToWavFile(wavData:ByteArray, rawDataBytes:ByteArray, sampleRate:uint, numChannels:uint, bitDepth:uint):void
+        {
+        	// Round data size to word if needed
+        	var dataSize:uint = rawDataBytes.length;
+        	if ((dataSize % 2) == 1) {
+            	dataSize += 1; 
+            	rawDataBytes.position = rawDataBytes.length;
+            	rawDataBytes.writeByte(0);
+            }
+            
+            // Write header
+            WaveFile.writeHeader(wavData, dataSize, sampleRate, numChannels, bitDepth);
+            
+            // Write data
+            wavData.writeBytes(rawDataBytes);
+            
+        }
+        
+        /**
+         * Writes just a WAV header to a destination ByteArray
+         * 
+         * @param wavData the destination ByteArray in which to write the wav file header
+         * @param dataSize the number of bytes of audio data (must be an even number of bytes, per WAV spec)
+         * @param sampleRate the sampling rate of the raw audio data
+         * @param numChannels the number of interleaved channels of audio data
+         * @param bitDepth the bit depth of the audio data
+         */  
+        public static function writeHeader(wavData:ByteArray, dataSize:uint, sampleRate:uint, numChannels:uint, bitDepth:uint):void
+        {
+             
             wavData.endian = Endian.BIG_ENDIAN;
             //big endian                       
             wavData.writeUTFBytes(RIFF_GROUP_ID);
@@ -160,6 +192,7 @@ package com.noteflight.standingwave3.formats
             //little endian
             var size:ByteArray = new ByteArray();  
             size.endian = Endian.LITTLE_ENDIAN;
+            
             size.writeUnsignedInt(dataSize + HEADER_OFFSET);
             wavData.writeBytes(size);
             
@@ -200,10 +233,10 @@ package com.noteflight.standingwave3.formats
             var subChunkSize:ByteArray = new ByteArray();  
             subChunkSize.endian = Endian.LITTLE_ENDIAN;
 
-            subChunkSize.writeUnsignedInt(dataSize * numChannels * bitDepth / BYTE_LENGTH);
+            subChunkSize.writeUnsignedInt(dataSize);
             
             wavData.writeBytes(subChunkSize);
-            return wavData;
+            
         }
     }
 }

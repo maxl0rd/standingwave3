@@ -59,6 +59,7 @@ package com.noteflight.standingwave3.generators
 			}
 			var factor:Number = 1024/frameCount; // the scaling factor while resampling the envelope
 			var envPosition:Number = (genPosition/frameCount) * 1024;
+			numFrames = Math.floor(numFrames);
 			
 			// Scale the attack envelope out to this slice
 			

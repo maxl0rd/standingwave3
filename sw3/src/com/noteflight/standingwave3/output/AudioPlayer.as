@@ -19,9 +19,13 @@ package com.noteflight.standingwave3.output
     
     import flash.events.Event;
     import flash.events.EventDispatcher;
+    import flash.events.ProgressEvent;
     import flash.events.SampleDataEvent;
+    import flash.events.TimerEvent;
     import flash.media.Sound;
     import flash.media.SoundChannel;
+    import flash.media.SoundTransform;
+    import flash.utils.Timer;
     
     /** Dispatched when the currently playing sound has completed. */
     [Event(type="flash.events.Event",name="complete")]
@@ -43,6 +47,9 @@ package com.noteflight.standingwave3.output
  
         // The delegate that handles the actual provision of the samples
         private var _sampleHandler:AudioSampleHandler;
+        
+        private static const PROGRESS_INTERVAL:Number = 1000 / 15;
+        private var _progressTimer:Timer = new Timer(PROGRESS_INTERVAL);
  
         /**
          * Construct a new AudioPlayer instance. 
@@ -52,7 +59,8 @@ package com.noteflight.standingwave3.output
         public function AudioPlayer(framesPerCallback:Number = 4096)
         {
             _sampleHandler = new AudioSampleHandler(framesPerCallback); 
-            _sampleHandler.addEventListener(Event.COMPLETE, handleComplete);
+            _sampleHandler.addEventListener(Event.SOUND_COMPLETE, handleComplete);
+            _progressTimer.addEventListener(TimerEvent.TIMER, handleProgressTimer);
         }
         
         /**
@@ -85,7 +93,17 @@ package com.noteflight.standingwave3.output
                 _sampleHandler.channel = null;
                 if (_channel)
                 {
-                    _channel.stop();
+                    // We don't need to tell the channel to stop: the next
+                    // SampleDataEvent callback will cause the sample handler
+                    // to return no frames, which immediately halts playback.
+                    // Stopping the channel here causes a crash, possibly due to
+                    // unexpected re-entrancy somewhere in the player FSM.
+                    // 
+                    // _channel.stop();
+                    
+   					// A more elegant solution is to mute the channel immediately,
+   					//  and then null the channel so that it returns nothing next event
+                    _channel.soundTransform = new SoundTransform(0);
                     _channel = null;
                 }
                 _sound = null;
@@ -121,6 +139,7 @@ package com.noteflight.standingwave3.output
             _sound.addEventListener(SampleDataEvent.SAMPLE_DATA, handleSampleData);
             _channel = _sound.play();
             _sampleHandler.channel = _channel;
+            _progressTimer.start();
         }
         
         /**
@@ -128,8 +147,18 @@ package com.noteflight.standingwave3.output
          */
         private function handleSampleData(e:SampleDataEvent):void
         {
+        	// Occassionally useful to turn this trace on...
+        	// trace("start handle");
+        	
             _sampleHandler.handleSampleData(e);
-            dispatchEvent(new Event("positionChange"));
+            
+            // trace("end handle");
+            
+        }
+        
+        private function handleProgressTimer(e:TimerEvent):void
+        {
+            dispatchEvent(new ProgressEvent("progress"));
         }
         
         /**
@@ -138,6 +167,7 @@ package com.noteflight.standingwave3.output
         private function handleComplete(e:Event):void
         {
             dispatchEvent(e);
+            _progressTimer.stop();
         }
  
         /**

@@ -21,17 +21,13 @@ package com.noteflight.standingwave3.performance
     import com.noteflight.standingwave3.elements.*;
     
     /**
-     * A ListPerformance is an ordered list of PerformanceElements, each of which possesses an onset relative to the
+     * A ListPerformance is an ordered list of PerformableAudioSources, each of which possesses an onset relative to the
      * start of the performance.  The list is optimized for the case where elements are appended in order of start time.
      */
     public class ListPerformance implements IPerformance
     {
-        private var _defaultDescriptor:AudioDescriptor = new AudioDescriptor();
-        private var _stereoDescriptor:AudioDescriptor;
         
-        public var _stereoize:Boolean;
-        
-        private var _elements:Vector.<PerformanceElement> = new Vector.<PerformanceElement>;
+        private var _elements:Vector.<PerformableAudioSource> = new Vector.<PerformableAudioSource>;
         
         private var _dirty:Boolean = false;
         
@@ -39,14 +35,14 @@ package com.noteflight.standingwave3.performance
         
         private var _lastIndex:Number = 0;
         
-        public function ListPerformance(stereoize:Boolean=false) {
-        	this.stereoize = false;
+        public function ListPerformance() {
+        	//
         }
         
         /**
          * Add a Performance Element to this Performance. 
          */
-        public function addElement(element:PerformanceElement):void
+        public function addElement(element:PerformableAudioSource):void
         {
             if ((! _dirty)
                 && _elements.length > 0
@@ -71,13 +67,13 @@ package com.noteflight.standingwave3.performance
          */
         public function addSourceAt(startTime:Number, source:IAudioSource, gain:Number=0, pan:Number=0):void
         {
-            addElement(new PerformanceElement(startTime, source, gain, pan));
+            addElement(new PerformableAudioSource(startTime, source, gain, pan));
         }
         
         /**
-         * The list of PerformanceElements within this Performance, sorted by onset. 
+         * The list of PerformableAudioSources within this Performance, sorted by onset. 
          */        
-        public function get elements():Vector.<PerformanceElement>
+        public function get elements():Vector.<PerformableAudioSource>
         {
             ensureSorted();
             return _elements;
@@ -88,7 +84,7 @@ package com.noteflight.standingwave3.performance
          */
         public function get lastStart():Number
         {
-            var el:Vector.<PerformanceElement> = elements;
+            var el:Vector.<PerformableAudioSource> = elements;
             return (el.length == 0) ? 0 : el[el.length-1].start;
         }
         
@@ -107,14 +103,14 @@ package com.noteflight.standingwave3.performance
         /**
          * @inheritDoc 
          */        
-        public function getElementsInRange(start:Number, end:Number):Vector.<PerformanceElement>
+        public function getElementsInRange(start:Number, end:Number):Vector.<PerformableAudioSource>
         {
             // This makes use of _lastIndex as a memory of what was last queried to optimize
             // the search for the first matching element, since queries will in general run
             // in forward order.
             //
-            var el:Vector.<PerformanceElement> = elements;
-            var result:Vector.<PerformanceElement> = new Vector.<PerformanceElement>();             
+            var el:Vector.<PerformableAudioSource> = elements;
+            var result:Vector.<PerformableAudioSource> = new Vector.<PerformableAudioSource>();             
             _lastIndex = Math.max(0, Math.min(_lastIndex, el.length - 1));
 
             // back up if prior element is ahead of starting frame
@@ -137,37 +133,13 @@ package com.noteflight.standingwave3.performance
 
             return result;
         }
-        
-        public function set stereoize(s:Boolean):void
-        {
-        	_stereoize = s;
-        }
-        
-        public function get stereoize():Boolean {
-        	return _stereoize;
-        }
-        
-        public function get descriptor():AudioDescriptor
-        {
-        	var rslt:AudioDescriptor;
-        	if (elements.length > 0) {
-                rslt =  elements[0].source.descriptor;
-         	} else {
-                rslt = _defaultDescriptor;
-            }
-            if (_stereoize) {
-            	_stereoDescriptor = new AudioDescriptor(rslt.rate, 2);
-        		rslt = _stereoDescriptor;
-        	}
-        	return rslt; 
-        }
 
         public function clone():IPerformance
         {
             var p:ListPerformance = new ListPerformance();
-            for each (var element:PerformanceElement in elements)
+            for each (var element:PerformableAudioSource in elements)
             {
-                p.addElement(new PerformanceElement(element.startTime, element.source.clone()));
+                p.addElement(new PerformableAudioSource(element.startTime, element.source.clone()));
             }
             return p;
         }
@@ -181,7 +153,7 @@ package com.noteflight.standingwave3.performance
             }
         }
 
-        private static function sortByStart(a:PerformanceElement, b:PerformanceElement):Number
+        private static function sortByStart(a:PerformableAudioSource, b:PerformableAudioSource):Number
         {
             var aStart:Number = a.start;
             var bStart:Number = b.start;
