@@ -142,6 +142,22 @@ package com.noteflight.standingwave3.output
             _progressTimer.start();
         }
         
+		public function pause():void 
+		{
+			if (_sampleHandler)
+			{
+				_sampleHandler.paused = true;
+			}
+		}
+		
+		public function resume():void 
+		{
+			if (_sampleHandler)
+			{
+				_sampleHandler.paused = false;
+			}
+		}
+		
         /**
          * Handle a SampleDataEvent by passing it to the AudioSampleHandler delegate.
          */

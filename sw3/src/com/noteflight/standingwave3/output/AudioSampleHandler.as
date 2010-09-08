@@ -25,7 +25,7 @@ package com.noteflight.standingwave3.output
     import flash.utils.getTimer;
  
     /** Dispatched when the currently playing sound has completed. */
-    [Event(type="flash.events.Event",name="complete")]
+    [Event(type="flash.events.Event",name="soundComplete")]
     
     /**
      * A delegate object that takes care of the work for audio playback by moving data
@@ -57,6 +57,9 @@ package com.noteflight.standingwave3.output
         
         /** A suck factor to keep track of how far off we are. */
         private var _deadFrames:Number = 0;
+
+		/** Pause audio output */
+		public var paused:Boolean = false;
 
         // The SoundChannel that the output is playing through, really only needed for calculating latency
         private var _channel:SoundChannel;
@@ -182,17 +185,14 @@ package com.noteflight.standingwave3.output
            
 			if (length > 0)
 			{	
-				// Get our output Sample.
-				sample = _source.getSample(length);  
-								
-				/* For testing load hell, you can add a horrible random delay here
-				Obviously, do not turn this on unless you want to suck.
-				if (Math.random() > 0.8) {
-					for (var d:int=0; d < 500000; d++) {
-						var stupid:Number = Math.atan( Math.random() );
-					}
+				if (paused) 
+				{
+					// Push an empty sample through, if it is paused. This will accrue "dead frames"
+					sample = new Sample(_source.descriptor, length, true);
+				} else {
+					// Get our output Sample.
+					sample = _source.getSample(length);  
 				}
-				*/
 				
 				// Read the sample data to the ByteArray provided by the handler, and then clean up
 				sample.writeBytes(e.data, 0, length);    
@@ -232,7 +232,13 @@ package com.noteflight.standingwave3.output
                 // cpuPercentage = Math.floor(cpuPercentage*0.8 + instantaneousCpu*0.2);
                 // trace("cpu: ", cpuPercentage + "%");
                 cpuPercentage = Math.floor(100 * (getTimer() - now) / (now - _lastSampleTime));
-                // trace("cpu: ", cpuPercentage + "%");
+                // trace("cpu: " + cpuPercentage + "%");
+				if (_channel) {
+					// trace("peak: " + _channel.leftPeak + " / " + _channel.rightPeak);
+					if (_channel.leftPeak > 0.98 || _channel.rightPeak > 0.98) {
+						trace("AUDIO CLIPPING");
+					}
+				}
             }
             _lastSampleTime = now;
         }
