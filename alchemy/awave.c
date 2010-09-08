@@ -369,7 +369,8 @@ static AS3_Val changeGain(void* self, AS3_Val args)
 	count = frames;
 	if (channels == 1) {
 		while (count--) {
-			*buffer++ *= leftGain; 
+			// *buffer++ *= leftGain; 
+			buffer[count] = buffer[count] * leftGain;
 		}
 	} else if (channels == 2) {
 		while (count--) {
