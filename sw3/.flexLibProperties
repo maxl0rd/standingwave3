@@ -1,50 +1,44 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<flexLibProperties version="1">
-<includeClasses>
-<classEntry path="com.noteflight.standingwave3.elements.AudioDescriptor"/>
-<classEntry path="com.noteflight.standingwave3.elements.IAudioFilter"/>
-<classEntry path="com.noteflight.standingwave3.elements.IAudioSource"/>
-<classEntry path="com.noteflight.standingwave3.elements.IDirectAccessSource"/>
-<classEntry path="com.noteflight.standingwave3.elements.IModulationSource"/>
-<classEntry path="com.noteflight.standingwave3.elements.IRandomAccessSource"/>
-<classEntry path="com.noteflight.standingwave3.elements.Mod"/>
-<classEntry path="com.noteflight.standingwave3.elements.Sample"/>
-<classEntry path="com.noteflight.standingwave3.filters.AbstractFilter"/>
-<classEntry path="com.noteflight.standingwave3.filters.AmpFilter"/>
-<classEntry path="com.noteflight.standingwave3.filters.BiquadFilter"/>
-<classEntry path="com.noteflight.standingwave3.filters.CacheFilter"/>
-<classEntry path="com.noteflight.standingwave3.filters.EchoFilter"/>
-<classEntry path="com.noteflight.standingwave3.filters.EnvelopeFilter"/>
-<classEntry path="com.noteflight.standingwave3.filters.FadeInFilter"/>
-<classEntry path="com.noteflight.standingwave3.filters.FadeOutFilter"/>
-<classEntry path="com.noteflight.standingwave3.filters.GainFilter"/>
-<classEntry path="com.noteflight.standingwave3.filters.OnePoleFilter"/>
-<classEntry path="com.noteflight.standingwave3.filters.OverdriveFilter"/>
-<classEntry path="com.noteflight.standingwave3.filters.PanFilter"/>
-<classEntry path="com.noteflight.standingwave3.filters.ResamplingFilter"/>
-<classEntry path="com.noteflight.standingwave3.filters.StandardizeFilter"/>
-<classEntry path="com.noteflight.standingwave3.filters.ToneControlFilter"/>
-<classEntry path="com.noteflight.standingwave3.formats.WaveFile"/>
-<classEntry path="com.noteflight.standingwave3.generators.ADSREnvelopeGenerator"/>
-<classEntry path="com.noteflight.standingwave3.generators.AbstractGenerator"/>
-<classEntry path="com.noteflight.standingwave3.generators.FadeEnvelopeGenerator"/>
-<classEntry path="com.noteflight.standingwave3.generators.SoundGenerator"/>
-<classEntry path="com.noteflight.standingwave3.modulation.Spline"/>
-<classEntry path="com.noteflight.standingwave3.output.AudioPlayer"/>
-<classEntry path="com.noteflight.standingwave3.output.AudioSampleHandler"/>
-<classEntry path="com.noteflight.standingwave3.performance.AudioPerformer"/>
-<classEntry path="com.noteflight.standingwave3.performance.IPerformance"/>
-<classEntry path="com.noteflight.standingwave3.performance.ListPerformance"/>
-<classEntry path="com.noteflight.standingwave3.performance.PerformanceElement"/>
-<classEntry path="com.noteflight.standingwave3.performance.QueuePerformance"/>
-<classEntry path="com.noteflight.standingwave3.sources.AbstractSource"/>
-<classEntry path="com.noteflight.standingwave3.sources.LoopSource"/>
-<classEntry path="com.noteflight.standingwave3.sources.NoiseSource"/>
-<classEntry path="com.noteflight.standingwave3.sources.SineSource"/>
-<classEntry path="com.noteflight.standingwave3.sources.SoundSource"/>
-<classEntry path="com.noteflight.standingwave3.utils.AudioUtils"/>
-<classEntry path="com.noteflight.standingwave3.utils.FilterCalculator"/>
-</includeClasses>
-<includeResources/>
-<namespaceManifests/>
+<flexLibProperties includeAllClasses="true" version="1">
+  <includeClasses>
+    <classEntry path="com.noteflight.standingwave3.elements.AudioDescriptor"/>
+    <classEntry path="com.noteflight.standingwave3.elements.IAudioFilter"/>
+    <classEntry path="com.noteflight.standingwave3.elements.IAudioSource"/>
+    <classEntry path="com.noteflight.standingwave3.elements.IDirectAccessSource"/>
+    <classEntry path="com.noteflight.standingwave3.elements.IRandomAccessSource"/>
+    <classEntry path="com.noteflight.standingwave3.elements.Sample"/>
+    <classEntry path="com.noteflight.standingwave3.filters.AbstractFilter"/>
+    <classEntry path="com.noteflight.standingwave3.filters.AmpFilter"/>
+    <classEntry path="com.noteflight.standingwave3.filters.BiquadFilter"/>
+    <classEntry path="com.noteflight.standingwave3.filters.CacheFilter"/>
+    <classEntry path="com.noteflight.standingwave3.filters.EchoFilter"/>
+    <classEntry path="com.noteflight.standingwave3.filters.EnvelopeFilter"/>
+    <classEntry path="com.noteflight.standingwave3.filters.FadeInFilter"/>
+    <classEntry path="com.noteflight.standingwave3.filters.FadeOutFilter"/>
+    <classEntry path="com.noteflight.standingwave3.filters.GainFilter"/>
+    <classEntry path="com.noteflight.standingwave3.filters.OverdriveFilter"/>
+    <classEntry path="com.noteflight.standingwave3.filters.PanFilter"/>
+    <classEntry path="com.noteflight.standingwave3.filters.ResamplingFilter"/>
+    <classEntry path="com.noteflight.standingwave3.filters.StandardizeFilter"/>
+    <classEntry path="com.noteflight.standingwave3.filters.ToneControlFilter"/>
+    <classEntry path="com.noteflight.standingwave3.formats.WaveFile"/>
+    <classEntry path="com.noteflight.standingwave3.generators.ADSREnvelopeGenerator"/>
+    <classEntry path="com.noteflight.standingwave3.generators.AbstractGenerator"/>
+    <classEntry path="com.noteflight.standingwave3.generators.FadeEnvelopeGenerator"/>
+    <classEntry path="com.noteflight.standingwave3.generators.SoundGenerator"/>
+    <classEntry path="com.noteflight.standingwave3.output.AudioPlayer"/>
+    <classEntry path="com.noteflight.standingwave3.output.AudioSampleHandler"/>
+    <classEntry path="com.noteflight.standingwave3.performance.AudioPerformer"/>
+    <classEntry path="com.noteflight.standingwave3.performance.IPerformance"/>
+    <classEntry path="com.noteflight.standingwave3.performance.ListPerformance"/>
+    <classEntry path="com.noteflight.standingwave3.sources.AbstractSource"/>
+    <classEntry path="com.noteflight.standingwave3.sources.LoopSource"/>
+    <classEntry path="com.noteflight.standingwave3.sources.NoiseSource"/>
+    <classEntry path="com.noteflight.standingwave3.sources.SineSource"/>
+    <classEntry path="com.noteflight.standingwave3.sources.SoundSource"/>
+    <classEntry path="com.noteflight.standingwave3.utils.AudioUtils"/>
+    <classEntry path="com.noteflight.standingwave3.utils.FilterCalculator"/>
+  </includeClasses>
+  <includeResources/>
+  <namespaceManifests/>
 </flexLibProperties>
