@@ -1,0 +1,517 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html> <head>
+ <title>StandingWave 3 Developers' Guide</title>
+ <link type="text/css" rel="stylesheet" href="styles.css"/>
+ <style>
+ a:link { color: #0000cc; }
+ body { background: #fff; margin: 3px 8px;}
+ body { font-family: arial, sans-serif;}
+ body { font-size: 90%;}
+ td td, th th, th td, td th { font-size: 100%;}
+ pre { font-size: 110%;}
+ table { border-collapse: separate; }
+ h1 { font-size: x-large; margin-top: 10px; }
+ h2 { font-size: large; margin-top: 40px; padding-top: 10px; border-top: 3px solid #ccc;}
+ h3 { font-size: medium; margin-top: 30px; margin-bottom: 0px; }
+ h4 { font-size: small; }
+ img { border: 0; }
+ pre {
+   padding: 0.5em;
+   margin-left: 10px;
+   background-color: #eee;
+ }
+ tt {
+   font-size: 120%;
+ }
+ </style>
+</head>
+
+<body>
+<h1>StandingWave Developers' Guide</h1>
+<p>Version 3.0.1</p>
+<p><b>Max Lord</b><br/>
+	<b>Joe Berkovitz (Noteflight, LLC)<br>
+</b></p>
+
+<h3>Notes on StandingWave 3</h3>
+
+<p>This document was originally written for SW2, but has been revised to refer to the StandingWave 3 library.
+  Where major differences between versions exist, these have been noted.</p>
+
+<h2>Requirements</h2>
+
+<p>StandingWave makes use of <tt>Sound</tt> APIs and the <tt>Vector</tt> data type,
+  which were introduced in Flash Player 10.  Flash Player 10.x or AIR
+  1.5 or higher is therefore required to make use of StandingWave.</p>
+
+<p>StandingWave does not make any use of the Flex framework, although
+  it does employ the <tt>[Bindable]</tt> tag in a few places.  It is
+  suitable for use in both Flex-based and AS3-only applications.</p>
+
+<p>To add internal DSP methods, it is necessary to recompile the Adobe Alchemy library
+  included in SW3. This requires a working knowledge of C programming, and a full
+  Adobe Alchemy installation. Alchemy development will also require more supporting dev tools
+  (ie XCode install on a mac) to get the most out of it. Most users should be fine using the
+  compiled library.</p> 
+
+<h2>Fundamental concepts and objects</h2>
+
+<p>
+StandingWave is an ActionScript3 code library whose purpose is to make
+dynamic audio synthesis on the Flash Platform readily accessible to
+software developers, including those who are not familiar with digital
+signal processing (DSP) techniques.  StandingWave exposes several
+fundamental ideas which can be combined in many different ways to
+create real-time sound output.  Each idea is represented by a kind of
+object, or family of related objects.  This section explains and
+illustrates these objects, preparing the way for more detailed
+examples.</p>
+
+<h3>Audio Sources</h3>
+
+<p>StandingWave has a notion of <b>audio sources</b>. These are
+  objects that can produce an audio signal over a span of time.  These
+  signals can be produced in diverse ways: they could be extracted
+  from sound files, taken from arrays of explicit numeric values,
+  determined by mathematical functions, or result from transformations
+  of other audio sources.</p>
+
+<p>There are many different kinds of audio sources in StandingWave,
+  and they all implement the interface <tt>IAudioSource</tt>.
+  Let's start with a simple example. Here's code that creates a source
+  yielding a 5-second sine wave at 440 Hz:</p>
+
+<pre>
+   var source:IAudioSource = new SineSource(new AudioDescriptor(), 5, 440);
+</pre>
+
+<p>Executing the above line of code doesn't cause any sound to be
+  produced, though.  A source just describes sound that <i>could</i>
+  be produced.  To make noise, we need something else...</p>
+
+<h3>The Audio Player</h3>
+
+<p>StandingWave allows you to create an <b>audio player</b>, which is
+exposed as an instance of the class <tt>AudioPlayer</tt>.  This object
+does the job of making the Flash Player actually play an audio source in
+real time.  So to hear the sine wave source described above,
+do this:</p>
+
+<pre>
+   var source:IAudioSource = new SineSource(new AudioDescriptor(), 5, 440);
+   var player:AudioPlayer = new AudioPlayer();
+   player.play(source);   // actually make some noise
+</pre>
+
+<p>Naturally the sound doesn't play all at once.  Playback is
+asynchronous, and the call to <tt>play()</tt> returns immediately
+after initiating sound output.  Once started, sound playback will
+continue until the sound source reaches its end, or
+the <tt>AudioPlayer</tt> is told to <tt>pause()</tt> or <tt>stop()</tt>.</p>
+
+<h3>Audio Filters</h3>
+
+<p>An <b>audio filter</b> is an object that transforms another audio
+source in some way.  The word "filter" doesn't mean that the object is
+actually a filter in the sense of removing frequencies or parts of the
+sound: it just means that an audio source passes through the filter,
+and is transformed by it.  (And some audio filters actually do "filter
+out" frequencies.)  Many filters can be thought of as "effects" in the
+sense of applying an effect on top of an underlying sound, but some of
+them have more fundamental behaviors.</p>
+
+<p>This example makes a pre-existing sound softer by 6 decibels.</p>
+
+<pre>
+   // create an IAudioSource from a Sound
+   var bell:IAudioSource = new SoundSource(new BellSoundAsset());
+   // make a new source that sounds the same, but has half the amplitude
+   var softBell:IAudioSource = new GainFilter(bell, -6);
+   player.play(softBell);
+</pre>
+
+<p>As this shows, filters are always constructed "on top of" another
+source.  And because filters are always sources too, you can build
+filters on top of other filters:</p>
+
+<pre>
+   // create an IAudioSource from the Sound, add an echo to it, make the echo softer
+   var bell:IAudioSource = new SoundSource(new BellSoundAsset());
+   var echoBell:IAudioSource = new EchoFilter(bell, 0.1);
+   var softEchoBell:IAudioSource = new GainFilter(echoBell, 0.5);
+   player.play(softEchoBell);
+</pre>
+
+<h3>Performances</h3>
+
+<p>Creating a precisely timed or synchronized sequence of multiple
+sounds has always presented a special challenge in the Flash Player.
+In particular, it is not possible to use multiple instances of
+the <tt>Sound</tt> object to achieve this, because
+calling <tt>play()</tt> in succession on two different Sounds does not
+guarantee their simultaneous playback.  Furthermore, <tt>Timers</tt>
+and <tt>enterFrame</tt> events do not provide reliable enough timing
+resolution to fire off a sound at the correct moment.</p>
+
+<p>Fortunately StandingWave provides a tool designed for this purpose:
+the notion of a <b>performance</b>.  A performance models a collection
+of audio sources, each of which can be offset to begin at a different
+time relative to some starting point in time.  StandingWave takes care
+of playing back these sources with the requested timing, to the
+resolution of a single audio sample.</p>
+
+<p>A performance is represented by the <tt>IPerformance</tt>
+interface, and can be treated as an audio source by wrapping it in an
+instance of <tt>AudioPerformer</tt> (which
+implements <tt>IAudioSource</tt>).  Here's an example:</p>
+
+<pre>
+  // Create an ascending sequence of three sine tones: A3, E4, A4
+  // whose start times are separated by exactly 1 second.
+  var sequence:ListPerformance = new ListPerformance();
+  sequence.addSourceAt(0, new SineSource(new AudioDescriptor(), 0.1, 440));
+  sequence.addSourceAt(1, new SineSource(new AudioDescriptor(), 0.1, 660));
+  sequence.addSourceAt(2, new SineSource(new AudioDescriptor(), 0.1, 880));
+  // Play it back.
+  var source:IAudioSource = new AudioPerformer(sequence);
+  player.play(source);
+</pre>
+
+<p>The same technique works for mixing simultaneous sources:</p>
+
+<pre>
+  // Create a chord of three simultaneous sine tones: A3, E4, A4.
+  var sequence:ListPerformance = new ListPerformance();
+  sequence.addSourceAt(0, new SineSource(new AudioDescriptor(), 0.1, 440));
+  sequence.addSourceAt(0, new SineSource(new AudioDescriptor(), 0.1, 660));
+  sequence.addSourceAt(0, new SineSource(new AudioDescriptor(), 0.2, 880));
+  // ...
+</pre>
+
+<p>The use of a performance might seem like overkill for mixing
+simultaneous sources, but it's not.  Notice that one of the notes in
+the above chord is longer than the others.  The end of that note is
+not mixed with the other sources, which fall silent after 0.1 seconds.
+The <tt>AudioPerformer</tt> takes care of the complexity of partially
+overlapping notes here by automatically sequencing the mixed-down,
+overlapping part of the chord to precede the unmixed, single-note
+"tail".</p>
+
+<p>Because an <tt>IPerformance</tt> can synchronize its constituent
+sources so precisely, it's best to use a performance object to mix timed sounds 
+  and play them back through a single instance of <tt>AudioPlayer</tt>.</p>
+
+<h2>How StandingWave works</h2>
+
+<p>Every <tt>IAudioSource</tt> exposes a function
+called <tt>getSample()</tt> that returns an actual array of audio
+signal values in a <tt>Sample</tt> object.
+Calling <tt>source.getSample(4096)</tt>, for example, obtains the next
+4096 samples from <tt>source</tt>.  This function is where the
+"synthetic rubber hits the road" in StandingWave, and sound synthesis
+actually happens.</p>
+
+<p>Each audio source has a <tt>position</tt> property that gives the
+index of the next sample frame that will be returned
+by <tt>getSample()</tt>.  In most cases this position cannot be set to
+an arbitrary value, but it can always be reset to the beginning of the
+source with <tt>resetPosition()</tt>.</p>
+
+<p>A source also has a <tt>frameCount</tt> property that indicates how
+  long it is, and a a <tt>descriptor</tt> that describes its audio format.</p>
+
+<p>The <tt>AudioPlayer</tt> object wraps a Flash 10 <tt>Sound</tt>
+object, which issues event callbacks each time it wants more samples
+to play.  During playback of an <tt>IAudioSource</tt>, that source
+will repeatedly be asked by the <tt>AudioPlayer</tt> for more samples,
+by calling its <tt>getSample()</tt> function.  If this source is a
+filter, a performer, or other complex object, it may in turn
+call <tt>getSample()</tt> on other "upstream" sources to
+obtain <tt>Sample</tt> objects from them, and modify the returned
+values in any desired fashion.</p>
+
+<p>To synthesize its output, the <tt>AudioPerformer</tt> object repeatedly queries its underlying
+<tt>IPerformance</tt> object for only those audio sources that begin
+in a short time window. This is also highly efficient due to the
+design of the various performance implementations.  It also maintains
+a list of currently-active audio sources, whose output is time-shifted
+and mixed to produce the performer's actual output.</p>
+
+<p>Taken as a whole, these approaches are highly efficient because
+  there is not a lot of function-call overhead needed to generate each
+  sample: the body of a good <tt>getSample()</tt> implementation will
+  contain a tight loop that can generate many samples very
+  quickly.</p>
+
+<p>This time-sliced approach also yields some other benefits: you can
+play an audio source effectively forever and it won't consume much
+memory at all since a source is never rendered in its entirety.  For
+example, make the neighbors go crazy with a sine tone that never ends:</p>
+
+<pre>
+   var source:IAudioSource = new SineSource(new AudioDescriptor(), int.MAX_VALUE, 440);
+   player.play(source);   // annoy your enemies
+</pre>
+
+<h2>Making the most of StandingWave</h2>
+
+<h3>AudioDescriptors</h3>
+
+<p>Although the audio API in Flash 10 functions entirely with 44.100 kHz
+stereophonic signals, StandingWave allows you to work with a 22.050 kHz
+sample rate and/or a monophonic signal.  This can result in
+significant speed gains if you are doing heavy audio processing.</p>
+
+<p>To support this flexibility, all audio sources in StandingWave are
+associated with an object called an <tt>AudioDescriptor</tt>.  This is
+a simple value object that holds the sample rate for the source's
+audio samples, along with the number of channels.</p>
+
+<p>Here's a 22.050k/mono sine wave, for example:</p>
+<pre>
+   var desc:AudioDescriptor =
+      new AudioDescriptor(AudioDescriptor.RATE_22050,
+                          AudioDescriptor.CHANNELS_MONO);
+   var source:IAudioSource = new SineSource(desc, 5, 440);
+</pre>
+
+<p>Some sources don't allow an <tt>AudioDescriptor</tt> to be
+provided.  For example, an audio filter typically has the same
+AudioDescriptor as the source that it is filtering, and a sound source
+based on an MP3 is required to expose 44.1k/stereo sound.</p>
+
+<p>The SW2 AudioPlayer could output sources with any valid AudioDescriptor,
+  but this is not the case in SW3. The AudioPlayer only accepts
+  44.1k stereo sources. If you have a chain of lower resolution descriptors
+  then simply pass them through the provided <tt>StandardizeFilter</tt>
+  and they will be converted. This filter provides basic linear interpolation
+  when upsampling to 44.1 kHz, so there is less aliasing when using lower sample rates
+  than was present in SW2.</p>
+
+<h3>Working with Samples</h3>
+
+<p>Perhaps the most fundamental audio source implementation
+is <tt>Sample</tt>, the building-block of StandingWave.
+
+<p>Because a <tt>Sample</tt> is just a list of numbers for each
+channel, you can put any audio data you want into it.  When it is
+played back, these numbers are just looked up and retrieved, as-is.
+It's the most efficient audio source you can have.</p>
+
+<p><i>Working directly with Samples is fundamentally different in SW3. </i>
+  The bad news is that is has become slightly more complex to directly 
+  edit sample data than SW2. The good news is that Samples work much faster.</p>
+
+<p>Each Sample is a fixed-size slice of memory in an enormous ByteArray hidden from
+  view. This is sometimes called "Alchemy memory" -- it is in fact a sort of virtual
+  machine. Each Sample object asks for an allocation of sample memory and is also
+  responsible for freeing it when it is no longer needed. Since the garbage collector
+  stays out of this memory space, you the developer are responsible for making sure
+  that your application does not leak memory here. (As an aside: this is cool because
+  Alchemy contains "secret" memory access opcodes that work much faster than the
+  typical ones used in AS3. This is why we can crunch Sample data faster in SW3.)</p>
+  
+<p>Most of the time, you don't even have to <i>look</i> at the data in a Sample object. 
+  It has plenty of methods to manipulate itself in different ways. Want to make it louder?
+  Want to mix two Samples together</p>
+  
+<pre>
+  sample1.changeGain(2);
+  sample2.mixIn(sample1);
+</pre>  
+  
+<p>Many algorithms that modify samples can be rethought in terms of the primitive DSP 
+  methods already available on Sample. Some of these are:</p>
+  
+  <ul>
+    <li> changeGain: make a Sample louder or softer</li>
+    <li> normalize: make a Sample full-scale volume without clipping</li>
+    <li> mixIn: mix another Sample into this Sample</li>
+    <li> mixInPan: mix another Sample in while panning left/right</li>
+    <li> multiplyIn: multiply another Sample, creating amplitude modulation effects</li>
+    <li> envelope: apply a smoothly changing gain function, an ADSR envelope or fade</li>
+    <li> biquad: filter or enhance a range of frequencies in the sound</li>
+    <li> wavetableInDirectAccessSource: create oscillators from other Samples used as lookup tables</li>
+    <li> delay: create echo effects</li>
+  </ul>
+
+<h3>Editing channelData in AS3</h3>
+
+<p>If you must edit a Sample's data by hand in a custom source, then there is a facility provided
+  to extract the Sample's data to a Vector. This Vector is called channelData, as it was in SW2.</p>
+  
+<p>If you ask for <tt>sample.channelData</tt> there will be a delay as the getter populates the Vector
+  with the data from Alchemy memory. You can then edit it at will. Then, you *must* remember to call
+  <tt>sample.commitChannelData()</tt> to synchronize it back into memory.</p>
+  
+<p>There are also a few functions to get and commit <i>slices</i> of sample data, and to control
+  the invalidation scheme if you are doing a lot of back and forth. But it's best to just avoid this
+  if possible.</p>
+  
+<h3>Working with Sounds</h3>
+
+<p>The <tt>SoundSource</tt> class is also fundamental: it provides a
+ready-made way to make a StandingWave audio source out of
+any <tt>flash.media.Sound</tt>. Such sounds are typically either
+loaded from a URL using a <tt>URLRequest</tt> or embedded into a Flex
+application using the <tt>[Embed]</tt> tag.</p>
+
+<p>This example illustrates how a SoundSource can be made from a dynamically loaded MP3 file:</p>
+
+<pre>
+  var source:IAudioSource;
+
+  function loadSound(url:String):void
+  {
+    var sound:Sound = new Sound(new URLRequest(url));
+    sound.addEventListener(Event.COMPLETE, handleSoundComplete);
+  }
+
+  function handleSoundComplete(e:Event):void
+  {
+    source = new SoundSource(e.target as Sound);
+    // at this point, the source can be used like any other IAudioSource
+  }
+</pre>
+
+<p><tt>SoundSources</tt> do not have to be 44.1 kHz / stereo, and if the <tt>AudioDescriptor</tt> is lower resolution,
+  less data will be extracted into the resulting Sample.</p>
+
+<p>While <tt>SoundSource</tt> is good for simply playing large Sound files, usually you want to continue to use the data extracted from the Sound. You can feed it to a CacheFilter, or alternately use the <tt>SoundGenerator</tt> class, which also stores all the data extracted.</p>
+
+
+<h3>Source State and Source Cloning</h3>
+
+<p>Each instance of an audio source, filter or performance has its own
+private state that depends on its <tt>position</tt> property, and may
+also depend on the audio signal which has been fed into it during the
+course of synthesis since the source was created or last reset.
+Consequently, one sometimes needs to create a new copy of a
+StandingWave object.  This can be achieved by calling
+its <tt>clone()</tt> function.  A clone is obligated to be an exact
+copy of the original, except for its position-dependent state which
+may be discarded.</p>
+
+<p>This means <b>you cannot use a source in two different
+places in a graph of StandingWave sources</b>, as this would require the
+source to potentially have two different states.</p>
+
+<p>What's more, clones of a complex object such as a filter or audio
+performer are "deep": they include clones of all downstream objects
+such as sources that feed into filters or performances.  This permits
+complex chains of filters, etc. to be used as "prototypes" for the
+construction of copies on demand, that can be used as independent
+sound sources with their own state.</p>
+
+<p>You might expect all this cloning to be very expensive, but it
+isn't so bad.  Sources with a lot of immutable data in them (like
+a <tt>Sample</tt> or a <tt>SoundSource</tt>) do not actually need to
+copy that data, because the mutable state of the source does not lie
+within this data and so the data isn't cloned.
+
+<h3>Working with Performances</h3>
+
+<p>There is one implementation of <tt>IPerformance</tt> 
+  available currently: <tt>ListPerformance</tt>.</p>
+
+<p><tt>ListPerformance</tt> is a classic sequencer: it plays a bunch
+of separate audio sources, each of which may start at any desired time
+offset relative to the start of the performance.  Sources may be
+simultaneous, overlapping, disjoint: doesn't matter.  This class is
+useful for choreographed, linear sequences of sonic events, such as
+most Western music.  This object can be modified during use: new timed
+sources can be appended to it while it is being played, to yield an
+indefinitely long stream of sound.</p>
+
+<p><tt>QueuePerformance</tt> from SW2 was not ported over as there were 0 instances of its use ever recorded.</p>
+
+<p>Particularly useful is the fact that an <tt>AudioPerformer</tt> is
+itself a plain old source.  This makes it very easy to build
+  performances out of other performances.</p>
+
+<p><tt>AudioPerformer</tt>, by the way, can play another neat trick:
+it can continue playing after it has exhausted the performance
+elements in its underlying <tt>IPerformance</tt>.  This is handy if
+you want to modify that performance while playing, or extend it with a
+period of silence.  To do so, simply set the <tt>duration</tt>
+property of the performer to a period longer or shorter than the
+underlying performance.</p>
+
+<h3>Random access sources and CacheFilter</h3>
+
+<p>It was mentioned above that most audio sources can only deliver the
+"next" bunch of audio signal values, via the <tt>getSample()</tt>
+function, and that you can't set the <tt>position</tt> property to an
+arbitrary value.  This is true in general, but there are exceptions.
+The biggest exceptions are the <tt>Sample</tt>
+and <tt>CacheFilter</tt> sources.  These both implement
+the <tt>IRandomAccessSource</tt> interface, allowing audio anywhere in
+the timespan of the source to be retrieved at will with
+the <tt>getSampleRange()</tt> function.</p>
+
+<p>A particularly handy random access source is <tt>CacheFilter</tt>,
+which you can stick in front of any audio source.  It caches as much
+of the underlying source as you happen to ever read from it
+using <tt>getSample()</tt> or <tt>getSampleRange()</tt>.  This caching
+ability makes it perfect as a way of working with a source via random
+access, because it doesn't read in any more of the source than you
+happen to actually need (imagine trying to cache all of an infinitely
+long sine tone...)</p>
+
+<p>Caches can have fixed or limited size for efficiency reasons and be sure
+  to experiment with those settings to find the best compromise between cpu
+  and memory use in your application.</p>
+
+<h3>IDirectAccessSource</h3>
+
+<p>The CacheFilter concept from SW2 was formalized into the <tt>IDirectAccessSource</tt> interface
+  in SW3. This interface describes any source that effectively acts as a cache. For example,
+  the Sample class implements it, and so does SoundGenerator. While unfortunately wordy,
+  this concept is key to getting efficient use out of the AudioPerformer. </p>
+  
+<p>In SW2, mixing a lot of sources often included unnecessary steps. Brand new Samples served as buckets 
+  to get other Samples to the mix buss, when they could have been written straight through. 
+  This is where IDirectAccessSource comes into play. If a source does not need to do any computation
+  to serve its data to a mix (ie it's a static sample), then its sample data should be written
+  directly into the mix. An IDirectAccessSource can provide a sample pointer to the requested
+  memory, and let the AudioPerformer access it <i>directly</i>, thus the name. Read the docs
+  for this interface to learn more about how this works in theory.</p>
+
+<p>In practice, all this means to most developers is that Samples and CacheFilters can be
+  mixed <i>very</i> efficiently compared to a comparable signal chain in SW2.</p>
+
+<h3>Working with decibels and factors</h3>
+
+<p>Loudness is perceived by the ear in a logarithmic fashion; each
+time the level of a signal doubles, we hear that as a single "step
+louder", not as "twice as loud".  Thus, to achieve a particular change
+in loudness, one multiplies by a number rather than adding it.</p>
+
+<p>Partly for this reason, it is common to use a logarithmic unit,
+the <i>decibel</i> or <i>dB</i>, to measure a change in loudness.
+These are logarithms, which means that they can in fact be added and
+subtracted, rather than multiplied together, to describe a cumulative
+  change in loudness.</p>
+
+<p>All of which was to prepare to say, the <tt>AudioUtils</tt> class provides
+some handy functions for converting between decibels and multiplying
+factors used by things such as <tt>GainFilter</tt>.
+
+<h3>AudioPlayer Batch Size</h3>
+
+<p>The <tt>AudioPlayer</tt> constructor takes an optional argument
+which is the <b>audio playback batch size</b>.  This gives the number
+of samples that will be played back on each <tt>SampleDataEvent</tt>
+  callback from the Flash Player.</p>
+
+<p>This is in fact a very important number, which must take a value
+between 2048 and 8192.  At 2048, you get very low-latency playback --
+the player will render sound fed into it almost instantly -- but your
+playback is very likely to suffer from instability and performance
+jitter.  At 8192, you get very high-stability playback -- but your
+latency will be way up there, too.  The default is 4096, which either
+combines the best qualities of both or the worst, depending on your
+  point of view.</p>
+  
+</body>
+</html>
