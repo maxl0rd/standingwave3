@@ -33,7 +33,7 @@ package com.noteflight.standingwave3.filters
         /**
          * Create a new GainFilter. 
          * @param source the underlying audio source
-         * @param gain the gain factor
+         * @param gain the gain change in decibels. ie 0 = unity gain, +6 is twice as loud, -6 is half as loud
          */
         public function GainFilter(source:IAudioSource, gain:Number)
         {
