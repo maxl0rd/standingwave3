@@ -44,6 +44,7 @@ package com.noteflight.standingwave3.performance
          *  
          * @param performance the IPerformance implementation to be performed when this
          * AudioPerformer is rendered as an IAudioSource.
+         * @param descriptor the audio descriptor of the output samples
          */
         public function AudioPerformer(performance:IPerformance, descriptor:AudioDescriptor)
         {
@@ -143,7 +144,6 @@ package com.noteflight.standingwave3.performance
             // if they continue past this time window.
             //
             
-            // trace("Voices: " + this._activeElements.length);
             
             for each (element in _activeElements)
             {
@@ -242,11 +242,9 @@ package com.noteflight.standingwave3.performance
         			// This range is not valid for direct access for some reason
         			// Treat it as an IAudioSource
         			return false;
-        			trace("Not direct");
         		}
         	} else {
         		// Not an IDirectAudioSource
-        		trace("Not direct");
         		return false;
         	}
         	
