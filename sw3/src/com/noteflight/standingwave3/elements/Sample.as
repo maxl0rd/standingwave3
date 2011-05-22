@@ -657,7 +657,7 @@ package com.noteflight.standingwave3.elements
 			thisSamplePointer = getSamplePointer(targetOffset); // mix in at this position
 			tableSamplePointer = source.getSamplePointer(0); // use the whole wavetable
 			numFrames = Math.min(numFrames, _frames - targetOffset); // don't mix more frames than are left in our target 
-        	var tableSize:Number = source.frameCount - 1; // minus a guard sample for interpolation
+        	var tableSize:Number = (source.frameCount - 1)*_source.descriptor.channels; // minus a guard sample for interpolation
         	var phase:Number = sourceOffset / source.frameCount; // phase = fractional progress through the source
         	var phaseAdd:Number = factor / source.frameCount;
         	var settings:Object = {tableSize:tableSize, phase:phase, phaseAdd:phaseAdd, phaseReset:0, y1:0, y2:0};
