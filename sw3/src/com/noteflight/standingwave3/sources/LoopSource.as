@@ -40,7 +40,7 @@ package com.noteflight.standingwave3.sources
 		
 		private var _phase:Number;
 		
-		private static const LOOP_MAX:Number = 30;
+		private static const LOOP_MAX:Number = int.MAX_VALUE;
 		
 		
 		/** 
