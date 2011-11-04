@@ -19,7 +19,6 @@
 #include <math.h>
 
 #include "AS3.h"
- 
 float pi    = 3.1415926535897932384626433832795029;
 float twopi = 6.2831853071795864769252867665590058;
 char trace[100];
@@ -153,7 +152,7 @@ static AS3_Val allocateSampleMemory(void* self, AS3_Val args)
 	
 	// If zero is true, then we must zero out this sample
 	// Otherwise, it is more efficient to leave it full of junk, if it's going to be overwritten
-	if (zero) {
+	if (buffer && zero) {
 		memset(buffer, 0, size);
 	}
 	
@@ -181,8 +180,10 @@ static AS3_Val reallocateSampleMemory(void* self, AS3_Val args)
 	// realloc is slow :(
 	buffer = (float *) realloc(buffer, newsize); 
 	
-	// zero out the new memory 
-	memset( buffer + oldframes*channels, 0, newsize - oldsize);
+	// zero out the new memory
+	if(buffer) {
+	  memset( buffer + oldframes*channels, 0, newsize - oldsize);
+  }
 	
 	// Return the new sample pointer
 	return AS3_Int((int)buffer);  
