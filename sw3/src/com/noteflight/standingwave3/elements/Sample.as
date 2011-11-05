@@ -72,11 +72,8 @@ package com.noteflight.standingwave3.elements
          * @param zeroB whether the new sample must be all 0s, otherwise contains unpredictable content
          * @param samplePointer a sample buffer pointer to reuse, in the case of cloned samples. if 0, new memory is allocated.
          */
-        public function Sample(descriptor:AudioDescriptor, numFrames:Number = -1, zeroB:Boolean = true, samplePointer:uint = 0)
+        public function Sample(descriptor:AudioDescriptor, numFrames:Number = -1, zero:Boolean = true, samplePointer:uint = 0)
         {
-        	var zero:int = 0;
-        	if (zeroB) { zero = 1; }
-        	
         	if (!_awave) {
         		// Creates the Alchemy C Lib when you first need a Sample
         		Sample.initAlchemicalWaveSingleton();
@@ -96,19 +93,28 @@ package com.noteflight.standingwave3.elements
             if (samplePointer) {
             	this._samplePointer = samplePointer;
             } else {
-            	this._samplePointer = _pool.fetch(len, zero);
+              this._samplePointer = _pool.fetch(len, zero ? 1 : 0);
             }
             
             // If a pool-sourced buffer was not available, then allocate new memory
             if (this._samplePointer == 0) {
-            	this._samplePointer = Sample._awave.allocateSampleMemory(numFrames, descriptor.channels, zero);
+              this._samplePointer = Sample.allocateSampleMemory(numFrames, descriptor.channels, zero);
             }
             _position = 0; 
             
            
             
         }
-         
+
+        public static function allocateSampleMemory(numFrames:Number, channels:Number, zero:Boolean = false):uint {
+            var pointer:uint =  Sample._awave.allocateSampleMemory(numFrames, channels, zero ? 1 : 0);
+            if(pointer == 0) {
+                throw new Error("Unable to allocate memory")
+            } else {
+                return pointer;
+            }
+        }
+
         /**
          * Returns the total sample memory size in bytes
          */ 
@@ -657,7 +663,7 @@ package com.noteflight.standingwave3.elements
 			thisSamplePointer = getSamplePointer(targetOffset); // mix in at this position
 			tableSamplePointer = source.getSamplePointer(0); // use the whole wavetable
 			numFrames = Math.min(numFrames, _frames - targetOffset); // don't mix more frames than are left in our target 
-        	var tableSize:Number = (source.frameCount - 1)*source.descriptor.channels; // minus a guard sample for interpolation
+		      var tableSize:Number = (source.frameCount - 1)*source.descriptor.channels; // minus a guard sample for interpolation
         	var phase:Number = sourceOffset / source.frameCount; // phase = fractional progress through the source
         	var phaseAdd:Number = factor / source.frameCount;
         	var settings:Object = {tableSize:tableSize, phase:phase, phaseAdd:phaseAdd, phaseReset:0, y1:0, y2:0};
@@ -757,7 +763,7 @@ package com.noteflight.standingwave3.elements
         		if (_descriptor.rate == AudioDescriptor.RATE_22050) {
         			_frames *= 2;
         		}  
-        		var newSample:uint = Sample._awave.allocateSampleMemory(_frames, 2);
+			      var newSample:uint = Sample.allocateSampleMemory(_frames, 2);
         		Sample._awave.standardize(newSample, _samplePointer,  _descriptor.channels, _frames, _descriptor.rate);	
         		Sample._awave.deallocateSampleMemory(_samplePointer);
         		_samplePointer = newSample;
@@ -936,7 +942,10 @@ package com.noteflight.standingwave3.elements
 			// store the pointers in the pool array
 			var sp:uint;
 			for (var b:int; b < 64; b++) {
-				sp = awave.allocateSampleMemory(len, 1);
+				sp = awave.allocateSampleMemory(len, 1, 0);
+				if(sp == 0) {
+				  throw new Error("Unable to allocate memory");
+			  }
 				pool[len].push(sp);
 			}
 		}
@@ -945,7 +954,7 @@ package com.noteflight.standingwave3.elements
 		 * Pull a buffer of this size from the pool.
 		 * Returns 0 if there isn't one available.
 		 */
-		public function fetch(len:Number, zero:int=1):uint
+		public function fetch(len:Number, zero:Boolean=true):uint
 		{
 			for (var s:int; s<sizes.length; s++) {
 				if (len == sizes[s] && pool[len].length > 0) {
