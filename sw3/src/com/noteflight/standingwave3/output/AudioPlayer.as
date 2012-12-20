@@ -106,6 +106,13 @@ package com.noteflight.standingwave3.output
                     _channel.soundTransform = new SoundTransform(0);
                     _channel = null;
                 }
+
+                if(_sound){
+                  /*This fixes an annoying bug. If you start and start the sample source again
+                  you will notice that the sound plays in multiple speed dependet on how often you started the same source again.
+                  It`s a bug! You have to remove the handler for sample data when erasing the _sound object. In general this also prevents memory leaking. */
+                  _sound.removeEventListener(SampleDataEvent.SAMPLE_DATA, handleSampleData);
+                }
                 _sound = null;
             }
         }
