@@ -93,7 +93,7 @@ package com.noteflight.standingwave3.elements
             if (samplePointer) {
             	this._samplePointer = samplePointer;
             } else {
-              this._samplePointer = _pool.fetch(len, zero ? 1 : 0);
+              this._samplePointer = _pool.fetch(len, zero ? true : false);
             }
             
             // If a pool-sourced buffer was not available, then allocate new memory
@@ -819,7 +819,11 @@ package com.noteflight.standingwave3.elements
           	}
             invalidateChannelData();
         }
-        
+		public function readBytes(bytes:ByteArray):void {
+			_awaveMemory.position = getSamplePointer();
+			_awaveMemory.writeBytes(bytes);
+			invalidateChannelData();
+		}
         
         /** 
          * Read the sample data out to another ByteArray.
